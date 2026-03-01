@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ELYTRA — Progress Tracker</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <meta name="description"
+        content="ELYTRA's personal daily progress tracker with calendar, tasks, and visualizations." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet" />
+    <!-- Firebase SDK (compat) — MUST load before app.js -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <!-- AUTH MODAL -->
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <span class="auth-glyph">⟡</span>
+                <span class="auth-brand">ELYTRA</span>
+            </div>
+            <p class="auth-subtitle">Your progress, everywhere.</p>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tabLogin">Log In</button>
+                <button class="auth-tab" id="tabSignup">Sign Up</button>
+            </div>
+
+            <div id="authError" class="auth-error" style="display:none;"></div>
+
+            <div class="auth-form" id="loginForm">
+                <input type="email" id="loginEmail" class="auth-input" placeholder="Email address"
+                    autocomplete="email" />
+                <input type="password" id="loginPassword" class="auth-input" placeholder="Password"
+                    autocomplete="current-password" />
+                <button class="auth-btn" id="loginBtn">Log In</button>
+                <button class="auth-link-btn" id="magicLinkBtn">✉ Send magic link instead</button>
+            </div>
+
+            <div class="auth-form" id="signupForm" style="display:none;">
+                <input type="email" id="signupEmail" class="auth-input" placeholder="Email address"
+                    autocomplete="email" />
+                <input type="password" id="signupPassword" class="auth-input" placeholder="Password (min 6 chars)"
+                    autocomplete="new-password" />
+                <button class="auth-btn" id="signupBtn">Create Account</button>
+            </div>
+
+            <div class="auth-divider"><span>or</span></div>
+            <button class="auth-google-btn" id="googleBtn">
+                <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4"
+                        d="M16.51 8H9.01v3h4.3c-.41 2-2.09 3-4.3 3-2.62 0-4.75-2.13-4.75-4.75S6.39 4.5 9.01 4.5c1.17 0 2.24.41 3.07 1.08l2.12-2.12C12.76 2.07 11 1.25 9 1.25 4.86 1.25 1.5 4.61 1.5 8.75s3.36 7.5 7.5 7.5c4.33 0 7.2-3.04 7.2-7.32 0-.47-.04-.92-.11-1.43z" />
+                    <path fill="#34A853"
+                        d="M2.28 5.37l2.46 1.8C5.41 5.7 7.06 4.5 9 4.5c1.17 0 2.24.41 3.07 1.08l2.12-2.12C12.76 2.07 11 1.25 9 1.25c-2.93 0-5.47 1.69-6.72 4.12z" />
+                    <path fill="#FBBC05"
+                        d="M9 16.25c1.97 0 3.72-.66 5.1-1.78l-2.35-1.93C10.96 13.1 10.03 13.5 9 13.5c-2.2 0-3.87-1.49-4.29-3.49l-2.48 1.91C3.6 14.6 6.09 16.25 9 16.25z" />
+                    <path fill="#EA4335"
+                        d="M16.51 8H9.01v3h4.3c-.2.95-.76 1.76-1.56 2.29l2.35 1.93C15.49 13.68 16.5 11.5 16.5 9c0-.39-.03-.75-.09-1.1l.1.1z" />
+                </svg>
+                Continue with Google
+            </button>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="header" id="appHeader" style="display:none;">
+        <div class="header-left">
+            <div class="logo-glyph">⟡</div>
+            <div class="header-brand">
+                <span class="brand-name">ELYTRA</span>
+                <span class="brand-sub">Progress Tracker</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="streak-badge">
+                <span class="streak-fire">🔥</span>
+                <span id="streakCount">0</span>
+                <span class="streak-label">day streak</span>
+            </div>
+            <div class="level-badge">
+                <span class="level-icon">⚡</span>
+                <span id="levelDisplay">Lv.1</span>
+            </div>
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                <span class="theme-icon" id="themeIcon">☀️</span>
+            </button>
+            <div class="user-area">
+                <button class="user-btn" id="userBtn" title="Account">👤</button>
+                <div class="user-menu" id="userMenu" style="display:none;">
+                    <span class="user-email" id="userEmail"></span>
+                    <button class="logout-btn" id="logoutBtn">Sign Out</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- XP BAR -->
+    <div class="xp-bar-wrap" id="appXpBar" style="display:none;">
+        <div class="xp-bar-track">
+            <div class="xp-bar-fill" id="xpBarFill"></div>
+        </div>
+        <span class="xp-label" id="xpLabel">0 / 100 XP</span>
+    </div>
+
+    <!-- MAIN LAYOUT -->
+    <main class="main-layout" id="appMain" style="display:none;">
+
+        <!-- LEFT PANEL -->
+        <aside class="panel panel-left">
+            <div class="card quote-card">
+                <div class="card-header">
+                    <span class="card-icon">✦</span>
+                    <span class="card-title">Daily Mantra</span>
+                </div>
+                <p class="quote-text" id="quoteText"></p>
+                <span class="quote-author" id="quoteAuthor"></span>
+            </div>
+
+            <div class="card stats-card">
+                <div class="card-header">
+                    <span class="card-icon">◈</span>
+                    <span class="card-title">Stats</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="statTotal">0</span>
+                        <span class="stat-label">Total Tasks Done</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="statRate">0%</span>
+                        <span class="stat-label">Avg. Completion</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="statBestStreak">0</span>
+                        <span class="stat-label">Best Streak</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="statProductiveDays">0</span>
+                        <span class="stat-label">Productive Days</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card heatmap-card">
+                <div class="card-header">
+                    <span class="card-icon">▦</span>
+                    <span class="card-title">Activity Heatmap</span>
+                </div>
+                <div class="heatmap-grid" id="heatmapGrid"></div>
+                <div class="heatmap-legend">
+                    <span>Less</span>
+                    <div class="legend-boxes">
+                        <div class="legend-box l0"></div>
+                        <div class="legend-box l1"></div>
+                        <div class="legend-box l2"></div>
+                        <div class="legend-box l3"></div>
+                        <div class="legend-box l4"></div>
+                    </div>
+                    <span>More</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER PANEL -->
+        <section class="panel panel-center">
+            <div class="card calendar-card">
+                <div class="card-header">
+                    <span class="card-icon">◎</span>
+                    <button class="cal-nav" id="calPrev">‹</button>
+                    <span class="card-title" id="calMonthLabel">March 2026</span>
+                    <button class="cal-nav" id="calNext">›</button>
+                </div>
+                <div class="calendar-weekdays">
+                    <span>Sun</span><span>Mon</span><span>Tue</span>
+                    <span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                </div>
+                <div class="calendar-grid" id="calendarGrid"></div>
+            </div>
+
+            <div class="card tasks-card">
+                <div class="card-header">
+                    <span class="card-icon">✧</span>
+                    <span class="card-title" id="taskDateLabel">Today's Tasks</span>
+                    <span class="task-count-badge" id="taskCountBadge">0/0</span>
+                </div>
+                <div class="task-input-row">
+                    <input type="text" id="taskInput" class="task-input" placeholder="Add a new task…" maxlength="60" />
+                    <button class="add-task-btn" id="addTaskBtn">+</button>
+                </div>
+                <ul class="task-list" id="taskList"></ul>
+                <div class="tasks-empty" id="tasksEmpty"><span>No tasks yet. Add one above! ✨</span></div>
+            </div>
+        </section>
+
+        <!-- RIGHT PANEL -->
+        <aside class="panel panel-right">
+            <div class="card chart-card">
+                <div class="card-header">
+                    <span class="card-icon">▬</span>
+                    <span class="card-title">Weekly Progress</span>
+                </div>
+                <div class="bar-chart" id="barChart"></div>
+                <div class="bar-legend">
+                    <span class="bar-legend-item"><span class="bl-box completed"></span>Completed</span>
+                    <span class="bar-legend-item"><span class="bl-box pending"></span>Pending</span>
+                </div>
+            </div>
+
+            <div class="card donut-card">
+                <div class="card-header">
+                    <span class="card-icon">◉</span>
+                    <span class="card-title">This Month</span>
+                </div>
+                <div class="donut-wrap">
+                    <svg class="donut-svg" viewBox="0 0 120 120">
+                        <circle class="donut-bg" cx="60" cy="60" r="48" />
+                        <circle class="donut-fill" cx="60" cy="60" r="48" id="donutFill" />
+                    </svg>
+                    <div class="donut-center">
+                        <span class="donut-pct" id="donutPct">0%</span>
+                        <span class="donut-sub">done</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card achievements-card">
+                <div class="card-header">
+                    <span class="card-icon">★</span>
+                    <span class="card-title">Achievements</span>
+                </div>
+                <div class="achievements-list" id="achievementsList"></div>
+            </div>
+        </aside>
+
+    </main>
+
+    <!-- SYNC INDICATOR -->
+    <div class="sync-indicator" id="syncIndicator">
+        <span class="sync-dot"></span>
+        <span id="syncText">Saving…</span>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <!-- App script loads AFTER HTML so DOM is ready and Supabase SDK is loaded -->
+    <script src="app.js"></script>
+</body>
+
+</html>
