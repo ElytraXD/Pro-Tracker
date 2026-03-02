@@ -97,6 +97,23 @@ body {
     overflow-x: hidden;
 }
 
+/* Main shooting-stars canvas — fixed above background, below content */
+#mainCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    /* in front of cards, behind header & modals */
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+
+#mainCanvas.active {
+    opacity: 1;
+}
+
 /* --- HEADER --- */
 .header {
     display: flex;
@@ -252,6 +269,9 @@ body {
     padding: 24px 28px;
     max-width: 1400px;
     margin: 0 auto;
+    position: relative;
+    /* establish stacking context above canvas */
+    z-index: 1;
 }
 
 .panel {
@@ -966,6 +986,17 @@ body {
     pointer-events: none;
 }
 
+/* --- AUTH CANVAS (3D background) --- */
+#authCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* --- AUTH CARD --- */
 .auth-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -977,6 +1008,103 @@ body {
     animation: fadeUp 0.4s ease;
     position: relative;
     z-index: 1;
+    transform-origin: center center;
+    will-change: transform, opacity;
+}
+
+/* ── Auth exit: card flies to user icon ── */
+.auth-card-exit {
+    animation: authCardFly 0.75s cubic-bezier(0.4, 0, 0.8, 1) forwards !important;
+    pointer-events: none;
+}
+
+@keyframes authCardFly {
+    0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+        border-radius: 24px;
+    }
+
+    10% {
+        /* Pop outward first */
+        transform: translate(0, -12px) scale(1.06);
+        opacity: 1;
+    }
+
+    38% {
+        /* Mid-flight squish — compressed horizontally, stretched vertically */
+        transform: translate(calc(var(--fly-x) * 0.28), calc(var(--fly-y) * 0.28)) scaleX(0.55) scaleY(0.85);
+        opacity: 0.92;
+        border-radius: 18px;
+    }
+
+    72% {
+        /* Nearly there — now squish both axes down */
+        transform: translate(calc(var(--fly-x) * 0.88), calc(var(--fly-y) * 0.88)) scale(0.1);
+        opacity: 0.45;
+        border-radius: 50%;
+    }
+
+    100% {
+        transform: translate(var(--fly-x), var(--fly-y)) scale(0);
+        opacity: 0;
+        border-radius: 50%;
+    }
+}
+
+/* ── Auth exit: overlay dissolves, bluring the bg into focus ── */
+.auth-overlay-exit {
+    animation: authOverlayDissipate 0.78s ease forwards !important;
+    pointer-events: none;
+}
+
+@keyframes authOverlayDissipate {
+    0% {
+        background: var(--bg);
+        backdrop-filter: blur(0px);
+        opacity: 1;
+    }
+
+    22% {
+        /* Solid drops away, leaving a blurry glass pane */
+        background: transparent;
+        backdrop-filter: blur(22px);
+        opacity: 1;
+    }
+
+    68% {
+        backdrop-filter: blur(8px);
+        opacity: 0.7;
+    }
+
+    100% {
+        backdrop-filter: blur(0px);
+        opacity: 0;
+    }
+}
+
+/* ── User icon spring-pop when card arrives ── */
+.user-btn-pop {
+    animation: userBtnPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes userBtnPop {
+    0% {
+        transform: scale(1);
+    }
+
+    45% {
+        transform: scale(1.45);
+        box-shadow: 0 0 22px var(--accent);
+    }
+
+    75% {
+        transform: scale(0.88);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 .auth-logo {
@@ -1064,6 +1192,38 @@ body {
 .auth-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Password wrapper + eye toggle */
+.pw-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.pw-wrap .auth-input {
+    padding-right: 44px;
+}
+
+.pw-toggle {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color var(--transition), background var(--transition);
+    flex-shrink: 0;
+}
+
+.pw-toggle:hover {
+    color: var(--accent);
+    background: var(--accent-glow);
 }
 
 .auth-btn {
@@ -1157,6 +1317,53 @@ body {
     color: var(--accent-2);
     margin-bottom: 8px;
     animation: fadeUp 0.2s ease;
+}
+
+/* Email verification notice */
+.verify-notice {
+    background: var(--accent-glow);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: fadeUp 0.25s ease;
+}
+
+.verify-icon {
+    font-size: 24px;
+    text-align: center;
+}
+
+.verify-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    text-align: center;
+}
+
+.verify-text strong {
+    color: var(--accent);
+    font-size: 14px;
+}
+
+.verify-text p {
+    margin-top: 4px;
+    color: var(--text-sub);
+}
+
+.verify-email-addr {
+    color: var(--accent);
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.verify-spam {
+    font-size: 11px;
+    color: var(--text-muted) !important;
+    margin-top: 6px !important;
 }
 
 /* --- USER MENU --- */
@@ -1293,33 +1500,352 @@ body {
     }
 }
 
-/* --- RESPONSIVE --- */
+/* ============================================================
+   RESPONSIVE BREAKPOINTS
+   ============================================================ */
+
+/* ── Tablet  (≤ 1100px) ─────────────────────────────────── */
 @media (max-width: 1100px) {
     .main-layout {
         grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        padding: 20px;
     }
 
     .panel-center {
         grid-column: 1 / -1;
         order: -1;
     }
+
+    .panel-left,
+    .panel-right {
+        gap: 14px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .heatmap-grid {
+        grid-template-columns: repeat(14, 1fr);
+    }
 }
 
-@media (max-width: 700px) {
+/* ── Phablet (≤ 768px) ──────────────────────────────────── */
+@media (max-width: 768px) {
+
+    /* Layout */
     .main-layout {
         grid-template-columns: 1fr;
-        padding: 16px;
+        padding: 14px;
+        gap: 14px;
     }
 
+    .panel-center {
+        order: -1;
+    }
+
+    /* Header */
     .header {
         padding: 12px 16px;
+        gap: 10px;
     }
 
-    .brand-name {
-        font-size: 16px;
+    .brand-sub {
+        display: none;
     }
 
     .streak-label {
         display: none;
+    }
+
+    .streak-badge,
+    .level-badge {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    .logo-glyph {
+        font-size: 22px;
+    }
+
+    .brand-name {
+        font-size: 17px;
+        letter-spacing: 2px;
+    }
+
+    .theme-toggle,
+    .user-btn {
+        width: 34px;
+        height: 34px;
+        font-size: 15px;
+    }
+
+    /* XP bar */
+    .xp-bar-wrap {
+        padding: 5px 16px;
+        gap: 8px;
+    }
+
+    .xp-label {
+        font-size: 10px;
+    }
+
+    /* Cards */
+    .card {
+        padding: 16px;
+    }
+
+    /* Stats */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    /* Heatmap */
+    .heatmap-grid {
+        grid-template-columns: repeat(13, 1fr);
+        gap: 2px;
+    }
+
+    .heatmap-cell {
+        border-radius: 2px;
+    }
+
+    /* Bar chart */
+    .bar-chart {
+        height: 110px;
+        gap: 5px;
+    }
+
+    /* Donut */
+    .donut-svg {
+        width: 120px;
+        height: 120px;
+    }
+
+    /* Tasks */
+    .task-list {
+        max-height: 260px;
+    }
+
+    .task-input-row {
+        gap: 6px;
+    }
+
+    /* Calendar */
+    .cal-day {
+        font-size: 12px;
+    }
+
+    /* Auth card */
+    .auth-card {
+        padding: 32px 24px;
+        margin: 16px;
+        max-width: calc(100vw - 32px);
+    }
+
+    .auth-brand {
+        font-size: 24px;
+    }
+
+    /* Sync + toast positioning */
+    .sync-indicator {
+        bottom: 16px;
+        left: 16px;
+        font-size: 11px;
+    }
+
+    .toast {
+        bottom: 16px;
+        right: 16px;
+        max-width: calc(100vw - 32px);
+        font-size: 13px;
+    }
+
+    /* User menu width */
+    .user-menu {
+        min-width: 170px;
+    }
+}
+
+/* ── Mobile  (≤ 480px) ──────────────────────────────────── */
+@media (max-width: 480px) {
+
+    /* Header — keep only essentials */
+    .header {
+        padding: 10px 12px;
+    }
+
+    .streak-badge {
+        display: none;
+    }
+
+    /* reclaim space, shown in stats */
+
+    .level-badge {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .brand-name {
+        font-size: 15px;
+        letter-spacing: 1px;
+    }
+
+    /* Layout */
+    .main-layout {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .card {
+        padding: 14px 12px;
+        border-radius: 12px;
+    }
+
+    /* Stats 2-up */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .stat-value {
+        font-size: 18px;
+    }
+
+    .stat-label {
+        font-size: 9px;
+    }
+
+    /* Heatmap — tighter grid */
+    .heatmap-grid {
+        grid-template-columns: repeat(10, 1fr);
+    }
+
+    /* Bar chart */
+    .bar-chart {
+        height: 90px;
+        gap: 4px;
+    }
+
+    .bar-day-label {
+        font-size: 8px;
+    }
+
+    .bar-value-label {
+        display: none;
+    }
+
+    /* Donut smaller */
+    .donut-svg {
+        width: 100px;
+        height: 100px;
+    }
+
+    .donut-pct {
+        font-size: 20px;
+    }
+
+    /* Tasks */
+    .task-input {
+        font-size: 13px;
+    }
+
+    .task-text {
+        font-size: 13px;
+    }
+
+    .task-list {
+        max-height: 220px;
+    }
+
+    /* Calendar */
+    .cal-day {
+        font-size: 11px;
+        border-radius: 6px;
+    }
+
+    .cal-nav {
+        width: 26px;
+        height: 26px;
+        font-size: 15px;
+    }
+
+    /* Card titles */
+    .card-title {
+        font-size: 11px;
+        letter-spacing: 1.5px;
+    }
+
+    .card-icon {
+        font-size: 14px;
+    }
+
+    /* Auth card */
+    .auth-card {
+        padding: 28px 18px;
+        border-radius: 18px;
+    }
+
+    .auth-glyph {
+        font-size: 26px;
+    }
+
+    .auth-brand {
+        font-size: 20px;
+        letter-spacing: 3px;
+    }
+
+    .auth-subtitle {
+        font-size: 12px;
+    }
+
+    .auth-input {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+
+    .auth-btn {
+        padding: 11px;
+        font-size: 14px;
+    }
+
+    /* Hide canvas spheres on small screens (show only starfield) */
+    /* We do this via JS flag set by CSS custom property */
+    :root {
+        --hide-spheres: 1;
+    }
+
+    /* Achievements compact */
+    .achievement-item {
+        padding: 8px 10px;
+    }
+
+    .achievement-icon {
+        font-size: 17px;
+    }
+
+    .achievement-name {
+        font-size: 12px;
+    }
+
+    .achievement-desc {
+        font-size: 10px;
+    }
+
+    /* Sync */
+    .sync-indicator {
+        bottom: 12px;
+        left: 12px;
+        padding: 6px 10px;
+        font-size: 10px;
+    }
+
+    .toast {
+        bottom: 12px;
+        right: 12px;
+        font-size: 12px;
+        padding: 10px 14px;
     }
 }

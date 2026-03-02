@@ -114,22 +114,59 @@ function showSync(state) {
     if (state !== 'saving') syncHideTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// ─── AUTH UI ─────────────────────────────────────────────
+// ─── AUTH UI ───────────────────────────────────────────────
 function showAuthScreen() {
     document.getElementById('authOverlay').style.display = 'flex';
     document.getElementById('appHeader').style.display = 'none';
     document.getElementById('appXpBar').style.display = 'none';
     document.getElementById('appMain').style.display = 'none';
+    // Fade out main night-sky canvas
+    document.getElementById('mainCanvas')?._stop?.();
 }
 
 function showApp() {
-    document.getElementById('authOverlay').style.display = 'none';
+    const card = document.querySelector('.auth-card');
+    const overlay = document.getElementById('authOverlay');
+    const userBtn = document.getElementById('userBtn');
+
+    // Reveal app content behind the overlay FIRST so it's visible through the dissolve
     document.getElementById('appHeader').style.display = 'flex';
     document.getElementById('appXpBar').style.display = 'flex';
     document.getElementById('appMain').style.display = 'grid';
     const emailEl = document.getElementById('userEmail');
     if (emailEl) emailEl.textContent = currentUser?.email || '';
+    // Start night-sky canvas (fades in via CSS opacity transition)
+    document.getElementById('mainCanvas')?._start?.();
+
+    if (card && userBtn && overlay) {
+        // Compute where the card needs to fly (center of card → center of userBtn)
+        const cR = card.getBoundingClientRect();
+        const bR = userBtn.getBoundingClientRect();
+        const dx = (bR.left + bR.width / 2) - (cR.left + cR.width / 2);
+        const dy = (bR.top + bR.height / 2) - (cR.top + cR.height / 2);
+        card.style.setProperty('--fly-x', dx + 'px');
+        card.style.setProperty('--fly-y', dy + 'px');
+
+        overlay.classList.add('auth-overlay-exit');
+        card.classList.add('auth-card-exit');
+
+        // Pop the user avatar just as the card "arrives"
+        setTimeout(() => {
+            userBtn.classList.add('user-btn-pop');
+            setTimeout(() => userBtn.classList.remove('user-btn-pop'), 450);
+        }, 600);
+
+        // Clean up once animation finishes
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            overlay.classList.remove('auth-overlay-exit');
+            card.classList.remove('auth-card-exit');
+        }, 800);
+    } else {
+        overlay.style.display = 'none';
+    }
 }
+
 
 function showAuthError(msg, isSuccess) {
     const el = document.getElementById('authError');
@@ -150,13 +187,22 @@ function friendlyAuthError(err) {
         'auth/wrong-password': 'Incorrect password.',
         'auth/invalid-credential': 'Incorrect email or password.',
         'auth/email-already-in-use': 'An account with this email already exists.',
-        'auth/weak-password': 'Password must be at least 6 characters.',
+        'auth/weak-password': 'Password must be at least 8 characters with a special character.',
         'auth/too-many-requests': '⚠️ Too many attempts. Please try again later.',
         'auth/network-request-failed': '⚠️ Network error. Check your connection.',
         'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
         'auth/popup-blocked': 'Popup was blocked. Allow popups for this site.',
     };
     return map[code] || err.message;
+}
+
+// ─── PASSWORD VALIDATION ─────────────────────────────────
+function validatePassword(pw) {
+    if (pw.length < 8) return 'Password must be at least 8 characters.';
+    if (/\s/.test(pw)) return 'Password must not contain spaces.';
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw))
+        return 'Password must include at least one special character (!@#$%^&* …)';
+    return null; // valid
 }
 
 function setTabLoading(btnId, loading, defaultText) {
@@ -228,7 +274,8 @@ document.getElementById('signupBtn').addEventListener('click', async () => {
     const email = document.getElementById('signupEmail').value.trim();
     const password = document.getElementById('signupPassword').value;
     if (!email || !password) { showAuthError('Please fill in all fields.'); return; }
-    if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+    const pwError = validatePassword(password);
+    if (pwError) { showAuthError(pwError); return; }
     setTabLoading('signupBtn', true, 'Create Account');
     try {
         await auth.createUserWithEmailAndPassword(email, password);
@@ -268,20 +315,59 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
 }
 
 // ─── GOOGLE SIGN-IN ───────────────────────────────────────
-document.getElementById('googleBtn').addEventListener('click', async () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    try {
-        await auth.signInWithPopup(provider);
-    } catch (err) {
+// Check for redirect result first (returned after Google redirects back)
+auth.getRedirectResult().then(result => {
+    // If result.user is set a redirect sign-in just completed — onAuthStateChanged handles the rest
+}).catch(err => {
+    if (err.code && err.code !== 'auth/no-current-user') {
         showAuthError(friendlyAuthError(err));
     }
 });
+
+document.getElementById('googleBtn').addEventListener('click', async () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+        // Try popup first; if blocked, fall back to redirect
+        await auth.signInWithPopup(provider);
+    } catch (err) {
+        if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+            // Fall back to redirect
+            try {
+                await auth.signInWithRedirect(provider);
+            } catch (redirectErr) {
+                showAuthError(friendlyAuthError(redirectErr));
+            }
+        } else {
+            showAuthError(friendlyAuthError(err));
+        }
+    }
+});
+
 
 // ─── LOGOUT ──────────────────────────────────────────────
 document.getElementById('logoutBtn')?.addEventListener('click', async () => {
     document.getElementById('userMenu').style.display = 'none';
     await auth.signOut();
 });
+
+// ─── PASSWORD TOGGLE ─────────────────────────────────────
+function setupPasswordToggle(inputId, toggleId, openSvgId, closedSvgId) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(toggleId);
+    const eyeOpen = document.getElementById(openSvgId);
+    const eyeClosed = document.getElementById(closedSvgId);
+    if (!btn || !input) return;
+    btn.addEventListener('click', () => {
+        const isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        eyeOpen.style.display = isHidden ? 'none' : '';
+        eyeClosed.style.display = isHidden ? '' : 'none';
+        btn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+    });
+}
+setupPasswordToggle('loginPassword', 'toggleLoginPw', 'eyeLoginOpen', 'eyeLoginClosed');
+setupPasswordToggle('signupPassword', 'toggleSignupPw', 'eyeSignupOpen', 'eyeSignupClosed');
+
 
 // ─── USER MENU TOGGLE ────────────────────────────────────
 document.getElementById('userBtn')?.addEventListener('click', e => {
@@ -499,7 +585,13 @@ function deleteTask(key, id) {
     const day = getDay(key);
     const idx = day.tasks.findIndex(t => t.id === id);
     if (idx === -1) return;
-    if (day.tasks[idx].done) day.totalDone--;
+    if (day.tasks[idx].done) {
+        day.totalDone--;
+        // Deduct XP for the completed task being removed
+        db.xp = Math.max(0, db.xp - XP_PER_TASK);
+        db.level = calcLevel(db.xp);
+        renderXPBar(); renderLevelBadge();
+    }
     day.tasks.splice(idx, 1);
     scheduleSave(); renderTasks();
 }
@@ -684,3 +776,285 @@ function renderAll() {
 
 // Kick off — show auth screen; onAuthStateChanged handles the rest
 showAuthScreen();
+
+// ─── 3D AUTH BACKGROUND ───────────────────────────────────
+function initAuthBackground() {
+    const canvas = document.getElementById('authCanvas');
+    const overlay = document.getElementById('authOverlay');
+    if (!canvas || !overlay) return;
+
+    const ctx = canvas.getContext('2d');
+    let W, H, cx, cy, animId = null;
+
+    function resize() {
+        W = canvas.width = overlay.offsetWidth || window.innerWidth;
+        H = canvas.height = overlay.offsetHeight || window.innerHeight;
+        cx = W / 2; cy = H / 2;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    /* ── Starfield ────────────────────────────────────────── */
+    const N_STARS = 220;
+    function mkStar() {
+        return {
+            x: (Math.random() - 0.5) * W * 3,
+            y: (Math.random() - 0.5) * H * 3,
+            z: Math.random() * W,
+            pz: W
+        };
+    }
+    const stars = Array.from({ length: N_STARS }, mkStar);
+
+    /* ── Shooting stars ───────────────────────────────────── */
+    const shooters = [];
+
+    /* ── Particle sphere (Fibonacci distribution) ─────────── */
+    const N_DOTS = 300;
+    const spherePts = (() => {
+        const G = Math.PI * (1 + Math.sqrt(5));
+        return Array.from({ length: N_DOTS }, (_, i) => {
+            const phi = Math.acos(1 - 2 * (i + .5) / N_DOTS);
+            const theta = G * i;
+            return [Math.sin(phi) * Math.cos(theta),
+            Math.sin(phi) * Math.sin(theta),
+            Math.cos(phi)];
+        });
+    })();
+
+    /* ── Orbit rings definition ───────────────────────────── */
+    const rings = [
+        { tilt: 0.22, speed: 1.0, color: 'rgba(124,109,255,0.28)', width: 1.4 },
+        { tilt: 1.15, speed: -0.65, color: 'rgba(255,107,157,0.22)', width: 1.0 },
+        { tilt: 2.05, speed: 0.45, color: 'rgba(77,255,195,0.18)', width: 0.8 },
+    ];
+
+    let rotX = 0.35, rotY = 0, rotX2 = 1.1, rotY2 = 0.5, tick = 0;
+
+    // Reusable: draw one sphere (glow + rings + dots) at (sox, soy)
+    function renderSphere(sox, soy, sr, rX, rY, dir) {
+        const glow = ctx.createRadialGradient(sox, soy, sr * 0.05, sox, soy, sr * 2.1);
+        glow.addColorStop(0, 'rgba(124,109,255,0.20)');
+        glow.addColorStop(0.5, 'rgba(100, 80,220,0.07)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(sox - sr * 2.3, soy - sr * 2.3, sr * 4.6, sr * 4.6);
+
+        const rb = tick * 0.006;
+        for (const r of rings) {
+            ctx.save();
+            ctx.translate(sox, soy);
+            ctx.rotate(r.tilt + rb * r.speed * dir);
+            ctx.scale(1, 0.26);
+            ctx.beginPath();
+            ctx.arc(0, 0, sr * 1.22, 0, Math.PI * 2);
+            ctx.strokeStyle = r.color;
+            ctx.lineWidth = r.width;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        const cX = Math.cos(rX), sX = Math.sin(rX);
+        const cY = Math.cos(rY), sY = Math.sin(rY);
+        const proj = spherePts.map(([ox, oy, oz]) => {
+            const x = ox * cY - oz * sY;
+            const z0 = ox * sY + oz * cY;
+            const y2 = oy * cX - z0 * sX;
+            const z2 = oy * sX + z0 * cX;
+            return { px: sox + x * sr, py: soy + y2 * sr, d: (z2 + 1) / 2 };
+        }).sort((a, b) => a.d - b.d);
+
+        for (const { px, py, d } of proj) {
+            const size = 0.5 + d * 2.0;
+            const alpha = 0.12 + d * 0.88;
+            const r = Math.round(100 + d * 155);
+            const g = Math.round(80 - d * 10);
+            const b = Math.round(255 - d * 60);
+            ctx.beginPath();
+            ctx.arc(px, py, size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+            ctx.fill();
+        }
+    }
+
+    function draw() {
+        animId = requestAnimationFrame(draw);
+        tick++;
+
+        ctx.clearRect(0, 0, W, H);
+
+        const SR = Math.min(W, H) * 0.17;  // individual sphere radius
+        const SY = H * 0.50;               // vertical centre
+
+        /* ── Two spheres flanking the auth card ─────────────── */
+        rotX += 0.0022; rotY += 0.0048;
+        rotX2 += 0.0018; rotY2 -= 0.0040;
+        if (W > 480) {
+            renderSphere(W * 0.13, SY, SR, rotX, rotY, 1);
+            renderSphere(W * 0.87, SY, SR, rotX2, rotY2, -1);
+        }
+
+        /* ── Warp starfield ─────────────────────────────────── */
+        for (const s of stars) {
+            s.pz = s.z;
+            s.z -= 5;
+            if (s.z <= 0) { Object.assign(s, mkStar()); continue; }
+
+            const sx = (s.x / s.z) * W * 0.5 + cx;
+            const sy = (s.y / s.z) * H * 0.5 + cy;
+            const px = (s.x / s.pz) * W * 0.5 + cx;
+            const py = (s.y / s.pz) * H * 0.5 + cy;
+
+            const t = 1 - s.z / W;
+            const alpha = t * t;              // quadratic fade-in
+            const width = Math.max(0.3, t * 2.2);
+
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(sx, sy);
+            ctx.strokeStyle = `rgba(210, 200, 255, ${alpha})`;
+            ctx.lineWidth = width;
+            ctx.stroke();
+        }
+
+        /* ── Shooting stars ─────────────────────────────────── */
+        if (tick % 115 === 0 || tick % 178 === 0) {
+            shooters.push({
+                x: Math.random() * W * 0.75,
+                y: Math.random() * H * 0.45,
+                angle: Math.PI / 5.5 + (Math.random() - 0.5) * 0.5,
+                len: 90 + Math.random() * 130,
+                speed: 13 + Math.random() * 10,
+                life: 1.0
+            });
+        }
+        for (let i = shooters.length - 1; i >= 0; i--) {
+            const s = shooters[i];
+            const ex = s.x + Math.cos(s.angle) * s.len;
+            const ey = s.y + Math.sin(s.angle) * s.len;
+            const g = ctx.createLinearGradient(s.x, s.y, ex, ey);
+            g.addColorStop(0, 'rgba(255,255,255,0)');
+            g.addColorStop(1, `rgba(200, 160, 255, ${s.life})`);
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = g;
+            ctx.lineWidth = 1.5 * s.life;
+            ctx.stroke();
+
+            // Tiny glow at the head
+            ctx.beginPath();
+            ctx.arc(ex, ey, 1.5 * s.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(220, 180, 255, ${s.life * 0.7})`;
+            ctx.fill();
+
+            s.x += Math.cos(s.angle) * s.speed;
+            s.y += Math.sin(s.angle) * s.speed;
+            s.life -= 0.020;
+            if (s.life <= 0) shooters.splice(i, 1);
+        }
+
+        // Pause when overlay not visible
+        if (overlay.style.display === 'none') {
+            cancelAnimationFrame(animId);
+            animId = null;
+        }
+    }
+
+    draw();
+
+    // Restart animation on logout (overlay shown again)
+    new MutationObserver(() => {
+        if (overlay.style.display !== 'none' && !animId) draw();
+    }).observe(overlay, { attributes: true, attributeFilter: ['style'] });
+}
+
+initAuthBackground();
+
+// ─── MAIN PAGE — SUBTLE SHOOTING STARS ───────────────────
+function initMainBackground() {
+    const canvas = document.getElementById('mainCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let W, H, animId = null;
+
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const meteors = [];
+    let spawnCooldown = 0;
+
+    function spawnMeteor() {
+        const angle = Math.PI / 5 + (Math.random() - 0.5) * 0.4;
+        meteors.push({
+            x: Math.random() * W * 0.85,
+            y: Math.random() * H * 0.35,
+            len: 80 + Math.random() * 100,
+            speed: 5 + Math.random() * 6,
+            angle,
+            life: 1,
+            decay: 0.010 + Math.random() * 0.008,
+        });
+    }
+
+    function draw() {
+        animId = requestAnimationFrame(draw);
+        ctx.clearRect(0, 0, W, H);
+
+        // Spawn meteors more frequently (max 5 at a time)
+        spawnCooldown--;
+        if (spawnCooldown <= 0 && meteors.length < 5) {
+            spawnMeteor();
+            spawnCooldown = 60 + Math.random() * 60; // ~1–2 s at 60fps
+        }
+
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            const m = meteors[i];
+            const ex = m.x + Math.cos(m.angle) * m.len;
+            const ey = m.y + Math.sin(m.angle) * m.len;
+
+            const g = ctx.createLinearGradient(m.x, m.y, ex, ey);
+            g.addColorStop(0, 'rgba(255,255,255,0)');
+            g.addColorStop(1, `rgba(200,185,255,${m.life * 0.75})`);
+
+            ctx.beginPath();
+            ctx.moveTo(m.x, m.y);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = g;
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // Tiny bright head
+            ctx.beginPath();
+            ctx.arc(ex, ey, 1.2 * m.life, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(230, 215, 255, ${m.life * 0.7})`;
+            ctx.fill();
+
+            m.x += Math.cos(m.angle) * m.speed;
+            m.y += Math.sin(m.angle) * m.speed;
+            m.life -= m.decay;
+            if (m.life <= 0) meteors.splice(i, 1);
+        }
+
+        // Stop only when the main app is hidden (user logged out)
+        if (document.getElementById('appMain')?.style.display === 'none') {
+            cancelAnimationFrame(animId);
+            animId = null;
+        }
+    }
+
+    canvas._start = () => { if (!animId) { canvas.classList.add('active'); draw(); } };
+    canvas._stop = () => { canvas.classList.remove('active'); };
+
+    new MutationObserver(() => {
+        if (document.getElementById('appMain')?.style.display !== 'none' && !animId)
+            canvas._start();
+    }).observe(document.getElementById('appMain'), { attributes: true, attributeFilter: ['style'] });
+}
+
+initMainBackground();
+
