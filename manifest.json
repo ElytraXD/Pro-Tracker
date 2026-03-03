@@ -6,7 +6,7 @@
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#0a0a0f",
-    "theme_color": "#7c6dff",
+    "theme_color": "#0a0a0f",
     "icons": [
         {
             "src": "media/pro-tracker-logo.png",
