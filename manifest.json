@@ -1,0 +1,18 @@
+{
+    "name": "ELYTRA — Progress Tracker",
+    "short_name": "ELYTRA",
+    "description": "Your personal daily progress tracker with habits, streaks, and visualizations.",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0a0a0f",
+    "theme_color": "#7c6dff",
+    "icons": [
+        {
+            "src": "media/pro-tracker-logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

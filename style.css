@@ -340,6 +340,28 @@ body {
 }
 
 /* --- QUOTE CARD --- */
+.quote-slider {
+    position: relative;
+    min-height: 80px;
+    overflow: hidden;
+}
+
+.quote-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+    pointer-events: none;
+}
+
+.quote-slide.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    position: relative;
+}
+
 .quote-text {
     font-size: 15px;
     line-height: 1.65;

@@ -17,6 +17,11 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#7c6dff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="media/pro-tracker-logo.png" />
 </head>
 
 <body>
@@ -157,10 +162,18 @@
             <div class="card quote-card">
                 <div class="card-header">
                     <span class="card-icon">✦</span>
-                    <span class="card-title">Daily Mantra</span>
+                    <span class="card-title">Daily Quote</span>
                 </div>
-                <p class="quote-text" id="quoteText"></p>
-                <span class="quote-author" id="quoteAuthor"></span>
+                <div class="quote-slider" id="quoteSlider">
+                    <div class="quote-slide active" id="quoteSlideA">
+                        <p class="quote-text" id="quoteTextA"></p>
+                        <span class="quote-author" id="quoteAuthorA"></span>
+                    </div>
+                    <div class="quote-slide" id="quoteSlideB">
+                        <p class="quote-text" id="quoteTextB"></p>
+                        <span class="quote-author" id="quoteAuthorB"></span>
+                    </div>
+                </div>
             </div>
 
             <div class="card stats-card">
@@ -222,7 +235,7 @@
                         <option value="silver">🥈 Silver</option>
                         <option value="gold">🥇 Gold</option>
                         <option value="diamond">💎 Diamond</option>
-                        <option value="aujla">🔱 Aujla</option>
+                        <option value="aujla">🔱 Karan Aujla</option>
                     </select>
                     <input type="text" id="habitInput" class="task-input" placeholder="Add a daily habit…"
                         maxlength="60" />
@@ -373,6 +386,11 @@
 
     <!-- App script loads AFTER HTML so DOM is ready and Supabase SDK is loaded -->
     <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(() => { });
+        }
+    </script>
 </body>
 
 </html>

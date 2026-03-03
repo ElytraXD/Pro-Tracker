@@ -22,7 +22,7 @@ const TIERS = {
     silver: { label: 'Silver', icon: '🥈', xp: 20, cls: 'tier-silver' },
     gold: { label: 'Gold', icon: '🥇', xp: 40, cls: 'tier-gold' },
     diamond: { label: 'Diamond', icon: '💎', xp: 80, cls: 'tier-diamond' },
-    aujla: { label: 'Aujla', icon: '🔱', xp: 150, cls: 'tier-aujla' },
+    aujla: { label: 'Karan Aujla', icon: '🔱', xp: 150, cls: 'tier-aujla' },
 };
 
 // ─── STATE ───────────────────────────────────────────────
@@ -583,24 +583,55 @@ function renderStreak() {
     document.getElementById('statBestStreak').textContent = db.bestStreak;
 }
 
-// ─── QUOTES ──────────────────────────────────────────────
+// ─── QUOTES (rotating with smooth crossfade) ────────────
 const QUOTES = [
-    { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-    { text: "Small steps every day build empires tomorrow.", author: "Unknown" },
-    { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
-    { text: "Done is better than perfect.", author: "Sheryl Sandberg" },
-    { text: "Push yourself, because no one else is going to do it for you.", author: "Unknown" },
-    { text: "Energy flows where attention goes.", author: "Ancient Wisdom" },
-    { text: "Success is the sum of small efforts repeated day in and day out.", author: "Robert Collier" },
-    { text: "Dream big. Start small. Act now.", author: "Robin Sharma" },
-    { text: "Your future self is watching you right now.", author: "Aubrey de Grey" },
-    { text: "Motivation gets you going. Habit keeps you growing.", author: "John C. Maxwell" },
+    { text: "If you are dreaming, make sure you dream big.", author: "Karan Aujla" },
+    { text: "It was all a dream.", author: "Karan Aujla" },
+    { text: "Hustle karo, trust the process.", author: "Karan Aujla" },
+    { text: "They didn't believe in us, now they all see us.", author: "Karan Aujla" },
+    { text: "Started from the bottom, now the whole team here.", author: "Karan Aujla" },
+    { text: "Apni mehnat te yakeen rakh, baaki sab hoja.", author: "Karan Aujla" },
+    { text: "Technoblade never dies.", author: "Technoblade" },
+    { text: "I'm an entertainer. That's what I do.", author: "Technoblade" },
+    { text: "Not even close, baby!", author: "Technoblade" },
+    { text: "If you wish to defeat me, train for another 300 years.", author: "Technoblade" },
 ];
 
+let _quoteIdx = 0;
+let _quoteOnA = true; // which slide is currently showing
+let _quoteTimer = null;
+
+function showQuote(idx, instant) {
+    const q = QUOTES[idx % QUOTES.length];
+    // Pick the incoming slide (the one NOT currently active)
+    const inSlide = document.getElementById(_quoteOnA ? 'quoteSlideB' : 'quoteSlideA');
+    const outSlide = document.getElementById(_quoteOnA ? 'quoteSlideA' : 'quoteSlideB');
+    const inText = document.getElementById(_quoteOnA ? 'quoteTextB' : 'quoteTextA');
+    const inAuth = document.getElementById(_quoteOnA ? 'quoteAuthorB' : 'quoteAuthorA');
+    if (!inSlide) return;
+
+    // Set content on the hidden slide
+    inText.textContent = `"${q.text}"`;
+    inAuth.textContent = `— ${q.author}`;
+
+    if (instant) {
+        outSlide.classList.remove('active');
+        inSlide.classList.add('active');
+    } else {
+        // Crossfade
+        outSlide.classList.remove('active');
+        inSlide.classList.add('active');
+    }
+    _quoteOnA = !_quoteOnA;
+}
+
 function renderQuote() {
-    const q = QUOTES[new Date().getDate() % QUOTES.length];
-    document.getElementById('quoteText').textContent = `"${q.text}"`;
-    document.getElementById('quoteAuthor').textContent = `— ${q.author}`;
+    showQuote(_quoteIdx, true);
+    clearInterval(_quoteTimer);
+    _quoteTimer = setInterval(() => {
+        _quoteIdx++;
+        showQuote(_quoteIdx, false);
+    }, 8000);
 }
 
 // ─── STATS (habit-based) ──────────────────────────────
@@ -857,26 +888,18 @@ function renderHeatmap() {
 // ─── ACHIEVEMENTS (habit-based) ──────────────────────────
 const ACHIEVEMENTS = [
     { id: 'first', icon: '🌱', name: 'First Step', desc: 'Complete your first habit', check: () => totalDoneHabits() >= 1 },
-    { id: 'ten', icon: '🚀', name: 'Getting Airborne', desc: 'Complete 10 habits total', check: () => totalDoneHabits() >= 10 },
-    { id: 'fifty', icon: '⚡', name: 'Power User', desc: 'Complete 50 habits total', check: () => totalDoneHabits() >= 50 },
-    { id: 'str3', icon: '🔥', name: 'On Fire', desc: '3-day streak', check: () => calcStreak() >= 3 },
-    { id: 'str7', icon: '💫', name: 'Week Warrior', desc: '7-day streak', check: () => calcStreak() >= 7 },
-    { id: 'lv5', icon: '🏆', name: 'Champion', desc: 'Reach level 5', check: () => db.level >= 5 },
+    { id: 'str2', icon: '�', name: 'Getting Started', desc: '2-day streak', check: () => calcStreak() >= 2 },
+    { id: 'str4', icon: '⚡', name: 'Building Momentum', desc: '4-day streak', check: () => calcStreak() >= 4 },
+    { id: 'str7', icon: '�', name: 'Week Warrior', desc: '7-day streak — one full week!', check: () => calcStreak() >= 7, sound: 'streak_7' },
+    { id: 'str15', icon: '�', name: 'Half Month Hero', desc: '15-day streak', check: () => calcStreak() >= 15 },
+    { id: 'str21', icon: '🏆', name: 'Habit Master', desc: '21-day streak — habits are forged!', check: () => calcStreak() >= 21, sound: 'streak_21' },
+    { id: 'str30', icon: '👑', name: 'Legendary', desc: '30-day streak — one full month!', check: () => calcStreak() >= 30 },
     {
-        id: 'perfect', icon: '✅', name: 'Perfectionist', desc: 'All habits done in one day',
-        check: () => db.habits.length > 0 && Object.values(db.days).some(d => {
-            const done = Object.values(d.habitLog || {}).filter(v => v).length;
-            return done >= db.habits.length;
-        })
-    },
-    {
-        id: 'month15', icon: '📅', name: 'Half Month', desc: '15+ productive days in a month',
-        check: () => {
-            const now = new Date(), prefix = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-            return Object.keys(db.days).filter(k =>
-                k.startsWith(prefix) && Object.values(db.days[k].habitLog || {}).some(v => v)
-            ).length >= 15;
-        }
+        id: 'perfect', icon: '✅', name: 'Perfectionist', desc: 'All habits for today are done',
+        check: () => db.habits.length > 0 && (() => {
+            const log = db.days[todayKey()]?.habitLog || {};
+            return Object.values(log).filter(v => v).length >= db.habits.length;
+        })()
     },
 ];
 
@@ -892,6 +915,8 @@ const SOUNDS = {
     totem: 'media/sounds/totem.mp3',
     level_up: 'media/sounds/level_up.mp3',
     achievement: 'media/sounds/achievement.mp3',
+    streak_7: 'media/sounds/streak_7.mp3',
+    streak_21: 'media/sounds/streak_21.mp3',
 };
 const BG_MUSIC_SRC = 'media/sounds/bg_music.mp3';
 
@@ -1007,7 +1032,7 @@ function showAchievementToast(a) {
     clearTimeout(achToastTimer);
     toast.classList.remove('ach-out');
     toast.classList.add('ach-in');
-    playSound('achievement');
+    playSound(a.sound || 'achievement');
 
     // After 3.8 s, slide back out
     achToastTimer = setTimeout(() => {
@@ -1024,6 +1049,7 @@ function renderAchievements() {
         if (ok && !db.unlocked[a.id]) {
             db.unlocked[a.id] = true; dirty = true;
             showAchievementToast(a);
+            if (a.sound) { triggerConfetti(); }
         }
         const el = document.createElement('div');
         el.className = `achievement-item ${ok ? 'unlocked' : 'locked'}`;
