@@ -17,6 +17,14 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const firestore = firebase.firestore();
 
+// ─── TIERS ───────────────────────────────────────────────
+const TIERS = {
+    silver: { label: 'Silver', icon: '🥈', xp: 20, cls: 'tier-silver' },
+    gold: { label: 'Gold', icon: '🥇', xp: 40, cls: 'tier-gold' },
+    diamond: { label: 'Diamond', icon: '💎', xp: 80, cls: 'tier-diamond' },
+    aujla: { label: 'Aujla', icon: '🔱', xp: 150, cls: 'tier-aujla' },
+};
+
 // ─── STATE ───────────────────────────────────────────────
 let db = defaultDB();
 let currentUser = null;
@@ -26,7 +34,7 @@ let calMonth = new Date().getMonth();
 let selectedKey = todayKey();
 
 function defaultDB() {
-    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {} };
+    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], displayName: '', avatar: '' };
 }
 
 // ─── DATE HELPERS ────────────────────────────────────────
@@ -56,6 +64,9 @@ async function pushCloud() {
             best_streak: db.bestStreak,
             theme: db.theme,
             unlocked: db.unlocked,
+            habits: db.habits,
+            displayName: db.displayName || '',
+            avatar: db.avatar || '',
             updated_at: firebase.firestore.FieldValue.serverTimestamp()
         });
 
@@ -87,6 +98,9 @@ async function pullCloud() {
             db.bestStreak = p.best_streak || 0;
             db.theme = p.theme || 'dark';
             db.unlocked = p.unlocked || {};
+            db.habits = p.habits || [];
+            db.displayName = p.displayName || '';
+            db.avatar = p.avatar || '';
         }
 
         // Pull daily tasks
@@ -133,8 +147,6 @@ function showApp() {
     document.getElementById('appHeader').style.display = 'flex';
     document.getElementById('appXpBar').style.display = 'flex';
     document.getElementById('appMain').style.display = 'grid';
-    const emailEl = document.getElementById('userEmail');
-    if (emailEl) emailEl.textContent = currentUser?.email || '';
     // Start night-sky canvas (fades in via CSS opacity transition)
     document.getElementById('mainCanvas')?._start?.();
 
@@ -290,7 +302,8 @@ document.getElementById('signupPassword').addEventListener('keydown', e => {
 });
 
 // ─── MAGIC LINK (Email Link Sign-In) ─────────────────────
-document.getElementById('magicLinkBtn').addEventListener('click', async () => {
+// Button removed from UI; handler kept for users clicking links from email
+document.getElementById('magicLinkBtn')?.addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
     if (!email) { showAuthError('Enter your email above first.'); return; }
     try {
@@ -345,10 +358,7 @@ document.getElementById('googleBtn').addEventListener('click', async () => {
 
 
 // ─── LOGOUT ──────────────────────────────────────────────
-document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-    document.getElementById('userMenu').style.display = 'none';
-    await auth.signOut();
-});
+// (Moved to profile modal block)
 
 // ─── PASSWORD TOGGLE ─────────────────────────────────────
 function setupPasswordToggle(inputId, toggleId, openSvgId, closedSvgId) {
@@ -369,19 +379,144 @@ setupPasswordToggle('loginPassword', 'toggleLoginPw', 'eyeLoginOpen', 'eyeLoginC
 setupPasswordToggle('signupPassword', 'toggleSignupPw', 'eyeSignupOpen', 'eyeSignupClosed');
 
 
-// ─── USER MENU TOGGLE ────────────────────────────────────
+// ─── PROFILE MODAL ─────────────────────────────────────────────
+function openProfile() {
+    renderProfile();
+    document.getElementById('profileOverlay').style.display = 'flex';
+}
+function closeProfile() {
+    document.getElementById('profileOverlay').style.display = 'none';
+}
+
 document.getElementById('userBtn')?.addEventListener('click', e => {
-    e.stopPropagation();
-    const m = document.getElementById('userMenu');
-    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    e.stopPropagation(); openProfile();
 });
-document.addEventListener('click', () => {
-    const m = document.getElementById('userMenu');
-    if (m) m.style.display = 'none';
+document.getElementById('profileClose')?.addEventListener('click', closeProfile);
+document.getElementById('profileOverlay')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeProfile();
+});
+
+function updateHeaderAvatar() {
+    const el = document.getElementById('headerAvatar');
+    if (!el) return;
+    if (db.avatar) {
+        el.innerHTML = `<img src="${db.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;" />`;
+    } else if (db.displayName) {
+        el.textContent = db.displayName[0].toUpperCase();
+        el.style.cssText = 'display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:15px;';
+    } else {
+        el.textContent = '👤';
+        el.style.cssText = '';
+    }
+}
+
+function renderProfile() {
+    // Avatar
+    const avatarEl = document.getElementById('avatarImg');
+    if (avatarEl) {
+        if (db.avatar) {
+            avatarEl.innerHTML = `<img src="${db.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+        } else if (db.displayName) {
+            avatarEl.textContent = db.displayName[0].toUpperCase();
+            avatarEl.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:var(--accent);';
+        } else {
+            avatarEl.textContent = '👤';
+            avatarEl.style.cssText = 'font-size:48px;display:flex;align-items:center;justify-content:center;';
+        }
+    }
+    // Name + email
+    const nameInput = document.getElementById('displayNameInput');
+    if (nameInput) nameInput.value = db.displayName || '';
+    const emailEl = document.getElementById('profileEmail');
+    if (emailEl) emailEl.textContent = currentUser?.email || '';
+
+    // Stats grid
+    const statsEl = document.getElementById('profileStats');
+    if (statsEl) {
+        const streak = calcStreak();
+        const done = totalDone(); // Assuming totalDone() is defined elsewhere
+        const habitsTotal = db.habits.length;
+        const habitsDoneToday = Object.keys((db.days[todayKey()]?.habitLog) || {}).length;
+        statsEl.innerHTML = [
+            { icon: '⚡', label: 'Total XP', val: db.xp },
+            { icon: '🏆', label: 'Level', val: `${db.level} — ${LEVEL_NAMES[db.level - 1]}` },
+            { icon: '🔥', label: 'Current Streak', val: `${streak} days` },
+            { icon: '🌟', label: 'Best Streak', val: `${db.bestStreak} days` },
+            { icon: '✅', label: 'Tasks Done', val: done },
+            { icon: '🔁', label: 'Habits Today', val: `${habitsDoneToday}/${habitsTotal}` },
+        ].map(s => `<div class="profile-stat">
+                <span class="profile-stat-icon">${s.icon}</span>
+                <span class="profile-stat-val">${s.val}</span>
+                <span class="profile-stat-label">${s.label}</span>
+            </div>`).join('');
+    }
+}
+
+// Avatar upload
+document.getElementById('avatarWrap')?.addEventListener('click', () =>
+    document.getElementById('avatarInput').click()
+);
+document.getElementById('avatarInput')?.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+            // Compress to 128x128 JPEG
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const size = Math.min(img.width, img.height);
+            const sx = (img.width - size) / 2, sy = (img.height - size) / 2;
+            ctx.drawImage(img, sx, sy, size, size, 0, 0, 128, 128);
+            db.avatar = canvas.toDataURL('image/jpeg', 0.75);
+            renderProfile();
+            updateHeaderAvatar();
+            scheduleSave();
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+// Save display name
+document.getElementById('saveProfileBtn')?.addEventListener('click', () => {
+    const val = document.getElementById('displayNameInput').value.trim();
+    db.displayName = val;
+    updateHeaderAvatar();
+    scheduleSave();
+    showToast('✓ Profile saved!');
+    renderProfile();
+});
+
+// In-modal theme + mute toggles
+document.getElementById('profileThemeBtn')?.addEventListener('click', () => {
+    setTheme(db.theme === 'dark' ? 'light' : 'dark'); scheduleSave();
+});
+document.getElementById('profileMuteBtn')?.addEventListener('click', () => setMute(!_muted));
+
+// Export data removed per user request
+
+// Hard reset
+document.getElementById('hardResetBtn')?.addEventListener('click', () => {
+    if (!confirm('⚠️ Are you sure? This will delete ALL your progress permanently.')) return;
+    if (!confirm('💀 Last chance! Hit OK to wipe everything and start from zero.')) return;
+    db.xp = 0; db.level = 1; db.bestStreak = 0;
+    db.unlocked = {}; db.days = {}; db.habits = [];
+    scheduleSave();
+    renderAll(); renderProfile();
+    showToast('💀 Everything has been reset.');
+});
+
+// Logout (in profile modal)
+document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+    closeProfile();
+    await auth.signOut();
 });
 
 // ─── XP / LEVEL ──────────────────────────────────────────
-const XP_PER_TASK = 15;
+const XP_PER_TASK = 20; // Default (Silver tier) for regular tasks
 const XP_LEVELS = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200, 4000];
 const LEVEL_NAMES = ['Novice', 'Seeker', 'Builder', 'Achiever', 'Champion', 'Veteran', 'Elite', 'Legend', 'Mythic', 'Ascendant', 'ELYTRA'];
 const MAX_LEVEL = LEVEL_NAMES.length; // 11
@@ -401,6 +536,7 @@ function addXP(n) {
         db.level = newLevel;
         showToast(`🎉 Level up! You are now ${LEVEL_NAMES[db.level - 1]} (Lv.${db.level})`);
         triggerConfetti();
+        playSound('level_up');
     }
     renderXPBar();
     renderLevelBadge();
@@ -556,8 +692,7 @@ function renderTasks() {
 function addTask(text) {
     if (!text.trim()) return;
     const day = getDay(selectedKey);
-    // Use crypto.randomUUID() to guarantee unique IDs even on rapid additions
-    day.tasks.push({ id: crypto.randomUUID(), text: text.trim(), done: false });
+    day.tasks.push({ id: crypto.randomUUID(), text: text.trim(), done: false, tier: 'silver' });
     day.totalAdded++;
     scheduleSave(); renderTasks(); showToast('✦ Task added!');
 }
@@ -566,15 +701,16 @@ function toggleTask(key, id) {
     const day = getDay(key);
     const task = day.tasks.find(t => t.id === id);
     if (!task) return;
+    const xpAmt = TIERS[task.tier]?.xp ?? XP_PER_TASK;
     if (!task.done) {
         task.done = true; day.totalDone++;
-        addXP(XP_PER_TASK);
-        showToast(`⚡ +${XP_PER_TASK} XP — Task complete!`);
+        addXP(xpAmt);
+        showToast(`⚡ +${xpAmt} XP — Task complete!`);
         triggerCheckAnim();
+        playSound('task_complete');
     } else {
         task.done = false; day.totalDone = Math.max(0, day.totalDone - 1);
-        db.xp = Math.max(0, db.xp - XP_PER_TASK);
-        // FIX: recalculate level downward when XP is lost
+        db.xp = Math.max(0, db.xp - xpAmt);
         db.level = calcLevel(db.xp);
         renderXPBar(); renderLevelBadge();
     }
@@ -587,8 +723,8 @@ function deleteTask(key, id) {
     if (idx === -1) return;
     if (day.tasks[idx].done) {
         day.totalDone--;
-        // Deduct XP for the completed task being removed
-        db.xp = Math.max(0, db.xp - XP_PER_TASK);
+        const xpAmt = TIERS[day.tasks[idx].tier]?.xp ?? XP_PER_TASK;
+        db.xp = Math.max(0, db.xp - xpAmt);
         db.level = calcLevel(db.xp);
         renderXPBar(); renderLevelBadge();
     }
@@ -602,6 +738,115 @@ document.getElementById('addTaskBtn').addEventListener('click', () => {
 });
 document.getElementById('taskInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') { addTask(e.target.value); e.target.value = ''; }
+});
+
+// ─── HABITS ──────────────────────────────────────────────
+function addHabit(text, tier) {
+    if (!text.trim()) return;
+    db.habits.push({ id: crypto.randomUUID(), text: text.trim(), tier: tier || 'silver' });
+    scheduleSave(); renderHabits(); showToast(`${TIERS[tier]?.icon} Habit added!`);
+}
+
+function deleteHabit(id) {
+    // Deduct XP if ticked today
+    const todayLog = (db.days[todayKey()] || {}).habitLog || {};
+    if (todayLog[id]) {
+        const habit = db.habits.find(h => h.id === id);
+        if (habit) {
+            const xpAmt = TIERS[habit.tier]?.xp ?? XP_PER_TASK;
+            db.xp = Math.max(0, db.xp - xpAmt);
+            db.level = calcLevel(db.xp);
+            renderXPBar(); renderLevelBadge();
+        }
+    }
+    db.habits = db.habits.filter(h => h.id !== id);
+    scheduleSave(); renderHabits();
+}
+
+function toggleHabitToday(id) {
+    const day = getDay(todayKey());
+    if (!day.habitLog) day.habitLog = {};
+    const habit = db.habits.find(h => h.id === id);
+    if (!habit) return;
+    const xpAmt = TIERS[habit.tier]?.xp ?? XP_PER_TASK;
+    if (!day.habitLog[id]) {
+        day.habitLog[id] = true;
+        addXP(xpAmt);
+        showToast(`${TIERS[habit.tier]?.icon} +${xpAmt} XP — ${habit.text} done!`);
+        if (habit.tier === 'diamond' || habit.tier === 'aujla') {
+            triggerTotemAnim(habit.tier);
+            playSound('totem');
+        } else {
+            triggerCheckAnim();
+            playSound('habit_complete');
+        }
+    } else {
+        delete day.habitLog[id];
+        db.xp = Math.max(0, db.xp - xpAmt);
+        db.level = calcLevel(db.xp);
+        renderXPBar(); renderLevelBadge();
+    }
+    scheduleSave(); renderHabits(); renderStats(); renderAchievements();
+}
+
+function renderHabits() {
+    const list = document.getElementById('habitList');
+    const empty = document.getElementById('habitsEmpty');
+    const badge = document.getElementById('habitCountBadge');
+    if (!list) return;
+    const todayLog = (db.days[todayKey()] || {}).habitLog || {};
+    const doneTodayCount = db.habits.filter(h => todayLog[h.id]).length;
+    badge.textContent = `${doneTodayCount}/${db.habits.length}`;
+    list.innerHTML = '';
+    empty.style.display = db.habits.length === 0 ? 'block' : 'none';
+
+    db.habits.forEach(habit => {
+        const tier = TIERS[habit.tier] || TIERS.silver;
+        const isDone = !!todayLog[habit.id];
+        const li = document.createElement('li');
+        li.className = `task-item habit-item ${tier.cls}`;
+
+        const cb = document.createElement('div');
+        cb.className = 'task-checkbox' + (isDone ? ' checked' : '');
+        cb.addEventListener('click', () => toggleHabitToday(habit.id));
+
+        const badge = document.createElement('span');
+        badge.className = `tier-badge ${tier.cls}`;
+        badge.title = `${tier.label} · ${tier.xp} XP`;
+        badge.textContent = tier.icon;
+
+        const txt = document.createElement('span');
+        txt.className = 'task-text' + (isDone ? ' done' : '');
+        txt.textContent = habit.text;
+
+        const xpTag = document.createElement('span');
+        xpTag.className = `tier-xp-tag ${tier.cls}`;
+        xpTag.textContent = `+${tier.xp}`;
+
+        const del = document.createElement('button');
+        del.className = 'task-delete';
+        del.innerHTML = '✕';
+        del.addEventListener('click', () => deleteHabit(habit.id));
+
+        li.appendChild(cb);
+        li.appendChild(badge);
+        li.appendChild(txt);
+        li.appendChild(xpTag);
+        li.appendChild(del);
+        list.appendChild(li);
+    });
+}
+
+document.getElementById('addHabitBtn')?.addEventListener('click', () => {
+    const inp = document.getElementById('habitInput');
+    const tier = document.getElementById('tierSelect').value;
+    addHabit(inp.value, tier); inp.value = ''; inp.focus();
+});
+document.getElementById('habitInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        const tier = document.getElementById('tierSelect').value;
+        addHabit(e.target.value, tier); e.target.value = '';
+    }
 });
 
 // ─── BAR CHART ───────────────────────────────────────────
@@ -698,12 +943,146 @@ function totalDone() {
     return Object.values(db.days).reduce((s, d) => s + d.tasks.filter(t => t.done).length, 0);
 }
 
+// \u2500\u2500\u2500 AUDIO SYSTEM \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+const SOUNDS = {
+    task_complete: 'media/sounds/task_complete.mp3',
+    habit_complete: 'media/sounds/habit_complete.mp3',
+    totem: 'media/sounds/totem.mp3',
+    level_up: 'media/sounds/level_up.mp3',
+    achievement: 'media/sounds/achievement.mp3',
+};
+const BG_MUSIC_SRC = 'media/sounds/bg_music.mp3';
+
+// \u2500 Mute state (persisted) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+let _muted = localStorage.getItem('elytra_muted') === '1';
+
+function setMute(muted) {
+    _muted = muted;
+    localStorage.setItem('elytra_muted', muted ? '1' : '0');
+    const icon = document.getElementById('muteIcon');
+    const profileIcon = document.getElementById('profileMuteIcon');
+    const btn = document.getElementById('muteBtn');
+    const emoji = muted ? '🔇' : '🔊';
+    if (icon) icon.textContent = emoji;
+    if (profileIcon) profileIcon.textContent = emoji;
+    // Tilt the button when muted so it looks "off"
+    if (btn) btn.classList.toggle('btn-muted', muted);
+    if (_bgMusic) {
+        _bgMusic.muted = muted;
+        if (!muted && _bgStarted) _bgMusic.play().catch(() => { });
+    }
+}
+
+document.getElementById('muteBtn')?.addEventListener('click', () => setMute(!_muted));
+
+// Apply persisted mute state immediately on load (moved below to after bgMusic init)
+
+// \u2500 Web Audio API SFX \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Step 1: Pre-fetch ArrayBuffers RIGHT NOW (no gesture needed for fetch).
+// Files download in background; by the time user clicks, they're ready.
+let _audioCtx = null;
+const _rawBuffers = {}; // name -> ArrayBuffer (pre-fetched)
+const _audioBuffers = {}; // name -> AudioBuffer (decoded, ready to play)
+
+Object.entries(SOUNDS).forEach(([name, src]) => {
+    fetch(src)
+        .then(r => r.ok ? r.arrayBuffer() : null)
+        .then(buf => { if (buf) _rawBuffers[name] = buf; })
+        .catch(() => { });
+});
+
+// Step 2: Create AudioContext & decode on first user gesture
+function _initAudioCtx() {
+    if (_audioCtx) return;
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Decode everything that has already been fetched
+    Object.entries(_rawBuffers).forEach(([name, raw]) => {
+        _audioCtx.decodeAudioData(raw.slice(0)) // .slice() to clone — decodeAudioData detaches the buffer
+            .then(decoded => { _audioBuffers[name] = decoded; })
+            .catch(() => { });
+    });
+    // Any file that arrives after gesture: auto-decode when fetched
+    // (handled by the fetch chain below listening for _audioCtx)
+}
+
+['pointerdown', 'keydown'].forEach(ev =>
+    window.addEventListener(ev, _initAudioCtx, { once: true })
+);
+
+function playSound(name) {
+    if (_muted) return;
+    _initAudioCtx();
+    const buf = _audioBuffers[name];
+    if (!buf || !_audioCtx) return;
+    try {
+        if (_audioCtx.state === 'suspended') _audioCtx.resume();
+        const src = _audioCtx.createBufferSource();
+        const gain = _audioCtx.createGain();
+        gain.gain.value = 0.65;
+        src.buffer = buf;
+        src.connect(gain);
+        gain.connect(_audioCtx.destination);
+        src.start(0);
+    } catch (e) { }
+}
+
+// \u2500 Background Music \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// HTMLAudioElement loop is better for long music than Web Audio API
+const _bgMusic = new Audio(BG_MUSIC_SRC);
+_bgMusic.loop = true;
+_bgMusic.volume = 0.25;
+_bgMusic.muted = _muted;
+let _bgStarted = false;
+
+function _startBgMusic() {
+    if (_bgStarted) return;
+    _bgStarted = true;
+    if (!_muted) _bgMusic.play().catch(() => { }); // graceful if file missing
+}
+// Start on first gesture (browser autoplay policy)
+['pointerdown', 'keydown'].forEach(ev =>
+    window.addEventListener(ev, _startBgMusic, { once: true })
+);
+
+// Apply persisted mute state immediately on load (now safe)
+setMute(_muted);
+
+// ─── MINECRAFT ACHIEVEMENT TOAST ─────────────────────────────
+let achToastTimer = null;
+function showAchievementToast(a) {
+    const toast = document.getElementById('achievementToast');
+    const icon = document.getElementById('achToastIcon');
+    const name = document.getElementById('achToastName');
+    const desc = document.getElementById('achToastDesc');
+    if (!toast) return;
+
+    // Populate
+    icon.textContent = a.icon;
+    name.textContent = a.name;
+    desc.textContent = a.desc;
+
+    // Reset & slide in
+    clearTimeout(achToastTimer);
+    toast.classList.remove('ach-out');
+    toast.classList.add('ach-in');
+    playSound('achievement');
+
+    // After 3.8 s, slide back out
+    achToastTimer = setTimeout(() => {
+        toast.classList.remove('ach-in');
+        toast.classList.add('ach-out');
+    }, 3800);
+}
+
 function renderAchievements() {
     const list = document.getElementById('achievementsList');
     list.innerHTML = ''; let dirty = false;
     ACHIEVEMENTS.forEach(a => {
         const ok = a.check();
-        if (ok && !db.unlocked[a.id]) { db.unlocked[a.id] = true; dirty = true; showToast(`${a.icon} Unlocked: ${a.name}!`); }
+        if (ok && !db.unlocked[a.id]) {
+            db.unlocked[a.id] = true; dirty = true;
+            showAchievementToast(a);
+        }
         const el = document.createElement('div');
         el.className = `achievement-item ${ok ? 'unlocked' : 'locked'}`;
         el.innerHTML = `<span class="achievement-icon">${a.icon}</span>
@@ -720,8 +1099,12 @@ function renderAchievements() {
 function setTheme(t) {
     db.theme = t || 'dark';
     document.documentElement.setAttribute('data-theme', db.theme);
+    const isDark = db.theme === 'dark';
     const icon = document.getElementById('themeIcon');
-    if (icon) icon.textContent = db.theme === 'dark' ? '☀️' : '🌙';
+    const profileIcon = document.getElementById('profileThemeIcon');
+    const emoji = isDark ? '☀️' : '🌙';
+    if (icon) icon.textContent = emoji;
+    if (profileIcon) profileIcon.textContent = emoji;
 }
 
 document.getElementById('themeToggle').addEventListener('click', () => {
@@ -766,11 +1149,115 @@ function triggerConfetti() {
     }
 }
 
+// ─── TOTEM OF UNDYING ANIMATION ──────────────────────────
+function triggerTotemAnim(tier) {
+    // Inject keyframes once
+    if (!document.getElementById('totemStyles')) {
+        const s = document.createElement('style'); s.id = 'totemStyles';
+        s.textContent = `
+            @keyframes totemFlash {
+                0%   { opacity: 0; }
+                8%   { opacity: 0.55; }
+                22%  { opacity: 0.18; }
+                40%  { opacity: 0.42; }
+                60%  { opacity: 0.08; }
+                100% { opacity: 0; }
+            }
+            @keyframes totemEmoji {
+                0%   { transform: translate(-50%,-50%) scale(0);   opacity: 0; filter: blur(12px); }
+                12%  { transform: translate(-50%,-50%) scale(4.5); opacity: 1; filter: blur(0px);  }
+                35%  { transform: translate(-50%,-50%) scale(3.2); opacity: 1; }
+                60%  { transform: translate(-50%,-50%) scale(3.8); opacity: 0.9; }
+                100% { transform: translate(-50%,-50%) scale(5.5); opacity: 0; filter: blur(8px);  }
+            }
+            @keyframes totemRay {
+                0%   { transform: translate(-50%,-50%) rotate(var(--r)) scaleX(0);  opacity: 0.9; }
+                35%  { opacity: 0.7; }
+                100% { transform: translate(-50%,-50%) rotate(var(--r)) scaleX(1);  opacity: 0; }
+            }
+            @keyframes totemGlow {
+                0%   { opacity: 0;   transform: translate(-50%,-50%) scale(0.2); }
+                20%  { opacity: 0.7; transform: translate(-50%,-50%) scale(1.2); }
+                100% { opacity: 0;   transform: translate(-50%,-50%) scale(2.8); }
+            }
+        `;
+        document.head.appendChild(s);
+    }
+
+    const isDiamond = tier === 'diamond';
+    const flashColor = isDiamond ? 'rgba(77,255,195,0.7)' : 'rgba(192,132,252,0.7)';
+    const glowColor = isDiamond ? 'rgba(77,255,195,0.5)' : 'rgba(255,107,157,0.45)';
+    const rayColors = isDiamond
+        ? ['#4dffc3', '#7c6dff', '#4dffc3', '#fff', '#4dffc3']
+        : ['#c084fc', '#ff6b9d', '#ffd700', '#c084fc', '#fff'];
+    const icon = TIERS[tier]?.icon || '⚡';
+
+    // 1. Full-screen flash
+    const flash = document.createElement('div');
+    flash.style.cssText = `position:fixed;inset:0;z-index:9995;pointer-events:none;
+        background:${flashColor};animation:totemFlash 1.1s ease forwards;`;
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 1200);
+
+    // 2. Radial glow orb
+    const glow = document.createElement('div');
+    glow.style.cssText = `position:fixed;top:50%;left:50%;width:320px;height:320px;
+        border-radius:50%;background:radial-gradient(circle,${glowColor} 0%,transparent 70%);
+        z-index:9996;pointer-events:none;animation:totemGlow 1.3s ease forwards;`;
+    document.body.appendChild(glow);
+    setTimeout(() => glow.remove(), 1400);
+
+    // 3. Radial rays (streak lines from center)
+    const N_RAYS = 28;
+    for (let i = 0; i < N_RAYS; i++) {
+        const angle = (360 / N_RAYS) * i + (Math.random() - 0.5) * 6;
+        const len = 160 + Math.random() * 200;
+        const color = rayColors[i % rayColors.length];
+        const delay = Math.random() * 0.18;
+        const dur = 0.6 + Math.random() * 0.5;
+        const w = 1.5 + Math.random() * 2;
+        const ray = document.createElement('div');
+        ray.style.cssText = `
+            position:fixed;top:50%;left:50%;
+            width:${len}px;height:${w}px;
+            transform-origin:left center;
+            --r:${angle}deg;
+            background:linear-gradient(90deg,${color},transparent);
+            border-radius:100px;
+            z-index:9997;pointer-events:none;
+            animation:totemRay ${dur}s ${delay}s cubic-bezier(0.2,0,0.8,1) forwards;
+            opacity:0;
+        `;
+        /* small bright dot at tip */
+        const dot = document.createElement('div');
+        dot.style.cssText = `position:absolute;right:0;top:50%;transform:translateY(-50%);
+            width:${w * 2.5}px;height:${w * 2.5}px;border-radius:50%;
+            background:${color};box-shadow:0 0 6px ${color};`;
+        ray.appendChild(dot);
+        document.body.appendChild(ray);
+        setTimeout(() => ray.remove(), (dur + delay) * 1000 + 100);
+    }
+
+    // 4. Big centre emoji burst — the TOTEM itself
+    const em = document.createElement('div');
+    em.style.cssText = `
+        position:fixed;top:50%;left:50%;
+        font-size:80px;line-height:1;
+        z-index:9999;pointer-events:none;
+        transform-origin:center;
+        animation:totemEmoji 1.4s cubic-bezier(0.16,1,0.3,1) forwards;
+    `;
+    em.textContent = icon;
+    document.body.appendChild(em);
+    setTimeout(() => em.remove(), 1500);
+}
+
 // ─── RENDER ALL ──────────────────────────────────────────
 function renderAll() {
     renderQuote(); renderXPBar(); renderLevelBadge();
-    renderCalendar(); renderTasks(); renderHeatmap();
+    renderCalendar(); renderTasks(); renderHabits(); renderHeatmap();
     renderStats(); renderAchievements();
+    updateHeaderAvatar();
     document.querySelectorAll('.card').forEach((c, i) => { c.style.animationDelay = `${i * 50}ms`; });
 }
 

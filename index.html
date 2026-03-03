@@ -64,7 +64,6 @@
                     </button>
                 </div>
                 <button class="auth-btn" id="loginBtn">Log In</button>
-                <button class="auth-link-btn" id="magicLinkBtn">✉ Send magic link instead</button>
             </div>
 
             <div class="auth-form" id="signupForm" style="display:none;">
@@ -128,15 +127,16 @@
                 <span class="level-icon">⚡</span>
                 <span id="levelDisplay">Lv.1</span>
             </div>
+            <button class="theme-toggle" id="muteBtn" aria-label="Toggle sound" title="Toggle sound">
+                <span id="muteIcon">🔊</span>
+            </button>
             <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
                 <span class="theme-icon" id="themeIcon">☀️</span>
             </button>
             <div class="user-area">
-                <button class="user-btn" id="userBtn" title="Account">👤</button>
-                <div class="user-menu" id="userMenu" style="display:none;">
-                    <span class="user-email" id="userEmail"></span>
-                    <button class="logout-btn" id="logoutBtn">Sign Out</button>
-                </div>
+                <button class="user-btn" id="userBtn" title="Profile">
+                    <span id="headerAvatar">👤</span>
+                </button>
             </div>
         </div>
     </header>
@@ -210,6 +210,28 @@
 
         <!-- CENTER PANEL -->
         <section class="panel panel-center">
+            <!-- HABITS CARD -->
+            <div class="card habits-card">
+                <div class="card-header">
+                    <span class="card-icon">🔁</span>
+                    <span class="card-title">Daily Habits</span>
+                    <span class="task-count-badge" id="habitCountBadge">0/0</span>
+                </div>
+                <div class="habit-input-row">
+                    <select class="tier-select" id="tierSelect">
+                        <option value="silver">🥈 Silver</option>
+                        <option value="gold">🥇 Gold</option>
+                        <option value="diamond">💎 Diamond</option>
+                        <option value="aujla">🔱 Aujla</option>
+                    </select>
+                    <input type="text" id="habitInput" class="task-input" placeholder="Add a daily habit…"
+                        maxlength="60" />
+                    <button class="add-task-btn" id="addHabitBtn">+</button>
+                </div>
+                <ul class="task-list" id="habitList"></ul>
+                <div class="tasks-empty" id="habitsEmpty"><span>No habits yet. Add one above! 🔁</span></div>
+            </div>
+
             <div class="card calendar-card">
                 <div class="card-header">
                     <span class="card-icon">◎</span>
@@ -287,8 +309,80 @@
         <span id="syncText">Saving…</span>
     </div>
 
-    <!-- TOAST -->
+    <!-- TOAST (regular notifications) -->
     <div class="toast" id="toast"></div>
+
+    <!-- ACHIEVEMENT TOAST (Minecraft-style, top-right) -->
+    <div class="achievement-toast" id="achievementToast">
+        <div class="ach-toast-header">
+            <span class="ach-toast-label">Achievement Unlocked!</span>
+        </div>
+        <div class="ach-toast-body">
+            <span class="ach-toast-icon" id="achToastIcon"></span>
+            <div class="ach-toast-info">
+                <div class="ach-toast-name" id="achToastName"></div>
+                <div class="ach-toast-desc" id="achToastDesc"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROFILE MODAL -->
+    <div class="profile-overlay" id="profileOverlay" style="display:none;">
+        <div class="profile-modal">
+
+            <!-- Close -->
+            <button class="profile-close" id="profileClose" aria-label="Close">✕</button>
+
+            <!-- Avatar + Identity -->
+            <div class="profile-identity">
+                <div class="avatar-wrap" id="avatarWrap" title="Click to change photo">
+                    <div class="avatar-img" id="avatarImg">👤</div>
+                    <div class="avatar-overlay">📷</div>
+                    <input type="file" id="avatarInput" accept="image/*" style="display:none;" />
+                </div>
+                <div class="profile-name-row">
+                    <input type="text" id="displayNameInput" class="profile-name-input" placeholder="Your display name…"
+                        maxlength="30" />
+                    <button class="profile-save-btn" id="saveProfileBtn">Save</button>
+                </div>
+                <span class="profile-email" id="profileEmail"></span>
+            </div>
+
+            <!-- Stats snapshot -->
+            <div class="profile-section">
+                <div class="profile-section-title">📊 Your Stats</div>
+                <div class="profile-stats-grid" id="profileStats"></div>
+            </div>
+
+            <!-- Settings -->
+            <div class="profile-section">
+                <div class="profile-section-title">⚙️ Settings</div>
+                <div class="profile-settings-row">
+                    <span>Dark / Light theme</span>
+                    <button class="theme-toggle" id="profileThemeBtn" aria-label="Toggle theme">
+                        <span id="profileThemeIcon">☀️</span>
+                    </button>
+                </div>
+                <div class="profile-settings-row">
+                    <span>Sound effects</span>
+                    <button class="theme-toggle" id="profileMuteBtn" aria-label="Toggle sound">
+                        <span id="profileMuteIcon">🔊</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="profile-section danger-zone">
+                <div class="profile-section-title">⚠️ Danger Zone</div>
+                <p class="danger-desc">This will permanently erase all your XP, tasks, habits, streaks and achievements.
+                    This cannot be undone.</p>
+                <button class="hard-reset-btn" id="hardResetBtn">💀 Hard Reset Everything</button>
+            </div>
+
+            <!-- Sign out -->
+            <button class="profile-logout-btn" id="logoutBtn">Sign Out</button>
+        </div>
+    </div>
 
     <!-- App script loads AFTER HTML so DOM is ready and Supabase SDK is loaded -->
     <script src="app.js"></script>
