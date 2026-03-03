@@ -589,6 +589,228 @@ body {
     background: var(--accent);
 }
 
+/* Calendar event marker */
+.cal-day.cal-event::before {
+    content: attr(data-event-emoji);
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    font-size: 9px;
+    line-height: 1;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+    z-index: 2;
+}
+
+/* --- EVENT MODAL --- */
+.event-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.event-modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 380px;
+    max-width: 92vw;
+    position: relative;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+    animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.event-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.event-modal-icon {
+    font-size: 24px;
+}
+
+.event-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.event-date-label {
+    font-size: 13px;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    margin-bottom: 18px;
+}
+
+.event-emoji-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.event-emoji-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.event-emoji-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card-2);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.event-emoji-btn:hover {
+    border-color: var(--accent);
+    transform: scale(1.15);
+}
+
+.event-emoji-btn.selected {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    box-shadow: 0 0 12px var(--accent-glow);
+    transform: scale(1.1);
+}
+
+.event-input {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.event-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.event-save-btn {
+    width: 100%;
+}
+
+.event-delete-btn {
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: 1px solid var(--accent-2);
+    border-radius: var(--radius-sm);
+    color: var(--accent-2);
+    font-family: var(--font-main);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.event-delete-btn:hover {
+    background: rgba(255, 107, 157, 0.12);
+}
+
+/* --- TODAY EVENT POPUP --- */
+.event-popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    animation: fadeIn 0.4s ease;
+}
+
+.event-popup-card {
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: 24px;
+    padding: 40px 36px;
+    text-align: center;
+    max-width: 380px;
+    width: 90vw;
+    box-shadow: 0 0 60px var(--accent-glow), 0 24px 80px rgba(0, 0, 0, 0.5);
+    animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.event-popup-emoji {
+    font-size: 64px;
+    line-height: 1;
+    margin-bottom: 16px;
+    animation: pulse-emoji 2s ease-in-out infinite;
+}
+
+@keyframes pulse-emoji {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.15);
+    }
+}
+
+.event-popup-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    margin-bottom: 12px;
+}
+
+.event-popup-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 28px;
+}
+
+.event-popup-close {
+    padding: 12px 32px;
+    font-size: 16px;
+}
+
 /* --- TASKS CARD --- */
 .task-count-badge {
     margin-left: auto;

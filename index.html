@@ -303,6 +303,37 @@
 
     </main>
 
+    <!-- EVENT MODAL (add/edit calendar events) -->
+    <div class="event-overlay" id="eventOverlay" style="display:none;">
+        <div class="event-modal">
+            <button class="profile-close" onclick="closeEventModal()" aria-label="Close">✕</button>
+            <div class="event-modal-header">
+                <span class="event-modal-icon">📅</span>
+                <span class="event-modal-title">Calendar Event</span>
+            </div>
+            <div class="event-date-label" id="eventDateLabel"></div>
+            <div class="event-emoji-label">Choose an icon</div>
+            <div class="event-emoji-grid" id="eventEmojiGrid"></div>
+            <input type="text" id="eventInput" class="auth-input event-input" placeholder="What's happening this day?"
+                maxlength="80" />
+            <div class="event-modal-actions">
+                <button class="auth-btn event-save-btn" onclick="saveEvent()">Save Event</button>
+                <button class="event-delete-btn" id="eventDeleteBtn" onclick="deleteEvent()" style="display:none;">🗑️
+                    Remove</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TODAY'S EVENT POPUP (celebratory) -->
+    <div class="event-popup-overlay" id="eventPopup" style="display:none;">
+        <div class="event-popup-card">
+            <div class="event-popup-emoji" id="eventPopupEmoji">🎉</div>
+            <div class="event-popup-label">Today's Special Event</div>
+            <div class="event-popup-text" id="eventPopupText"></div>
+            <button class="auth-btn event-popup-close" onclick="closeEventPopup()">Let's Go! 🚀</button>
+        </div>
+    </div>
+
     <!-- SYNC INDICATOR -->
     <div class="sync-indicator" id="syncIndicator">
         <span class="sync-dot"></span>

@@ -34,7 +34,7 @@ let calMonth = new Date().getMonth();
 let selectedKey = todayKey();
 
 function defaultDB() {
-    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], displayName: '', avatar: '' };
+    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], events: {}, displayName: '', avatar: '' };
 }
 
 // ─── DATE HELPERS ────────────────────────────────────────
@@ -65,6 +65,7 @@ async function pushCloud() {
             theme: db.theme,
             unlocked: db.unlocked,
             habits: db.habits,
+            events: db.events || {},
             displayName: db.displayName || '',
             avatar: db.avatar || '',
             updated_at: firebase.firestore.FieldValue.serverTimestamp()
@@ -99,6 +100,7 @@ async function pullCloud() {
             db.theme = p.theme || 'dark';
             db.unlocked = p.unlocked || {};
             db.habits = p.habits || [];
+            db.events = p.events || {};
             db.displayName = p.displayName || '';
             db.avatar = p.avatar || '';
         }
@@ -238,6 +240,8 @@ auth.onAuthStateChanged(async (user) => {
         renderAll();
         const name = db.displayName || 'ELYTRA';
         showToast(`👋 Welcome back, ${name}!`);
+        // Check for today's special event
+        setTimeout(() => checkTodayEvent(), 1200);
     } else {
         currentUser = null;
         db = defaultDB();
@@ -652,7 +656,7 @@ function renderStats() {
     renderStreak();
 }
 
-// ─── CALENDAR (habit-based) ───────────────────────────
+// ─── CALENDAR (habit-based + events) ──────────────────
 function renderCalendar() {
     const grid = document.getElementById('calendarGrid');
     const label = document.getElementById('calMonthLabel');
@@ -680,10 +684,117 @@ function renderCalendar() {
         if (key === today) div.classList.add('cal-today');
         if (all) div.classList.add('cal-done');
         else if (any) div.classList.add('cal-partial');
-        div.addEventListener('click', () => { renderCalendar(); });
+
+        // Event marker
+        const evt = db.events?.[key];
+        if (evt) {
+            div.classList.add('cal-event');
+            div.setAttribute('data-event-emoji', evt.emoji || '⭐');
+        }
+
+        div.addEventListener('click', () => openEventModal(key));
         grid.appendChild(div);
     }
 }
+
+// ─── CALENDAR EVENTS ─────────────────────────────────────
+const EVENT_EMOJIS = ['🎂', '🎉', '🏆', '💼', '✈️', '❤️', '🎯', '📅', '🎊', '⭐', '🔔', '💡'];
+let _eventModalKey = null;
+
+function openEventModal(dateKey) {
+    _eventModalKey = dateKey;
+    const overlay = document.getElementById('eventOverlay');
+    const dateLabel = document.getElementById('eventDateLabel');
+    const input = document.getElementById('eventInput');
+    const emojiGrid = document.getElementById('eventEmojiGrid');
+    const deleteBtn = document.getElementById('eventDeleteBtn');
+
+    // Format date nicely
+    const [y, m, d] = dateKey.split('-');
+    const dateObj = new Date(y, m - 1, d);
+    const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    dateLabel.textContent = dateObj.toLocaleDateString('en-US', opts);
+
+    const existing = db.events?.[dateKey];
+    input.value = existing?.text || '';
+
+    // Render emoji picker
+    emojiGrid.innerHTML = '';
+    const selectedEmoji = existing?.emoji || '⭐';
+    EVENT_EMOJIS.forEach(em => {
+        const btn = document.createElement('button');
+        btn.className = 'event-emoji-btn' + (em === selectedEmoji ? ' selected' : '');
+        btn.textContent = em;
+        btn.addEventListener('click', () => {
+            emojiGrid.querySelectorAll('.event-emoji-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        });
+        emojiGrid.appendChild(btn);
+    });
+
+    deleteBtn.style.display = existing ? 'block' : 'none';
+    overlay.style.display = 'flex';
+    setTimeout(() => input.focus(), 100);
+}
+
+function closeEventModal() {
+    document.getElementById('eventOverlay').style.display = 'none';
+    _eventModalKey = null;
+}
+
+function saveEvent() {
+    if (!_eventModalKey) return;
+    const text = document.getElementById('eventInput').value.trim();
+    if (!text) { showToast('⚠️ Enter event text!'); return; }
+    const selected = document.querySelector('.event-emoji-btn.selected');
+    const emoji = selected ? selected.textContent : '⭐';
+    if (!db.events) db.events = {};
+    db.events[_eventModalKey] = { text, emoji };
+    scheduleSave();
+    renderCalendar();
+    closeEventModal();
+    showToast(`${emoji} Event saved!`);
+}
+
+function deleteEvent() {
+    if (!_eventModalKey || !db.events?.[_eventModalKey]) return;
+    delete db.events[_eventModalKey];
+    scheduleSave();
+    renderCalendar();
+    closeEventModal();
+    showToast('🗑️ Event removed.');
+}
+
+// Today's event popup — shown once per login
+function checkTodayEvent() {
+    const evt = db.events?.[todayKey()];
+    if (!evt) return;
+    const popup = document.getElementById('eventPopup');
+    const popupEmoji = document.getElementById('eventPopupEmoji');
+    const popupText = document.getElementById('eventPopupText');
+    if (!popup) return;
+
+    popupEmoji.textContent = evt.emoji || '⭐';
+    popupText.textContent = evt.text;
+    popup.style.display = 'flex';
+    triggerConfetti();
+    playSound('achievement');
+}
+
+function closeEventPopup() {
+    document.getElementById('eventPopup').style.display = 'none';
+}
+
+// Event modal: Enter to save, backdrop to close
+document.getElementById('eventInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveEvent();
+});
+document.getElementById('eventOverlay')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeEventModal();
+});
+document.getElementById('eventPopup')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeEventPopup();
+});
 
 document.getElementById('calPrev').addEventListener('click', () => {
     if (--calMonth < 0) { calMonth = 11; calYear--; } renderCalendar();
