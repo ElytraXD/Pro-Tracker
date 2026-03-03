@@ -236,7 +236,8 @@ auth.onAuthStateChanged(async (user) => {
         setTheme(db.theme);
         showApp();
         renderAll();
-        showToast('👋 Welcome back, ELYTRA!');
+        const name = db.displayName || 'ELYTRA';
+        showToast(`👋 Welcome back, ${name}!`);
     } else {
         currentUser = null;
         db = defaultDB();
@@ -434,7 +435,7 @@ function renderProfile() {
     const statsEl = document.getElementById('profileStats');
     if (statsEl) {
         const streak = calcStreak();
-        const done = totalDone(); // Assuming totalDone() is defined elsewhere
+        const done = totalDoneHabits();
         const habitsTotal = db.habits.length;
         const habitsDoneToday = Object.keys((db.days[todayKey()]?.habitLog) || {}).length;
         statsEl.innerHTML = [
@@ -442,8 +443,8 @@ function renderProfile() {
             { icon: '🏆', label: 'Level', val: `${db.level} — ${LEVEL_NAMES[db.level - 1]}` },
             { icon: '🔥', label: 'Current Streak', val: `${streak} days` },
             { icon: '🌟', label: 'Best Streak', val: `${db.bestStreak} days` },
-            { icon: '✅', label: 'Tasks Done', val: done },
-            { icon: '🔁', label: 'Habits Today', val: `${habitsDoneToday}/${habitsTotal}` },
+            { icon: '✅', label: 'Habits Done Today', val: `${habitsDoneToday}/${habitsTotal}` },
+            { icon: '�', label: 'Total Habits Done', val: totalDoneHabits?.() ?? 0 },
         ].map(s => `<div class="profile-stat">
                 <span class="profile-stat-icon">${s.icon}</span>
                 <span class="profile-stat-val">${s.val}</span>
@@ -556,14 +557,16 @@ function renderLevelBadge() {
     document.getElementById('levelDisplay').textContent = `Lv.${db.level}`;
 }
 
-// ─── STREAKS ─────────────────────────────────────────────
+// ─── STREAKS (habit-based) ───────────────────────────────
+// A day counts as active if the user logged at least one habit.
 function calcStreak() {
     let streak = 0, d = new Date();
-    const MAX_DAYS = 3650; // safety cap
+    const MAX_DAYS = 3650;
     for (let i = 0; i < MAX_DAYS; i++) {
         const k = fmtKey(d);
-        const day = db.days[k];
-        if (day && day.tasks.some(t => t.done)) {
+        const log = db.days[k]?.habitLog || {};
+        const anyDone = Object.values(log).some(v => v);
+        if (anyDone) {
             streak++;
         } else if (k !== todayKey()) {
             break;
@@ -600,21 +603,25 @@ function renderQuote() {
     document.getElementById('quoteAuthor').textContent = `— ${q.author}`;
 }
 
-// ─── STATS ───────────────────────────────────────────────
+// ─── STATS (habit-based) ──────────────────────────────
 function renderStats() {
-    let done = 0, added = 0, productive = 0;
-    Object.values(db.days).forEach(d => {
-        const n = d.tasks.filter(t => t.done).length;
-        done += n; added += d.tasks.length;
-        if (n > 0) productive++;
+    let totalDone = 0, productive = 0;
+    const trackedDays = Object.values(db.days).filter(d =>
+        d.habitLog && Object.values(d.habitLog).some(v => v)
+    );
+    trackedDays.forEach(day => {
+        totalDone += Object.values(day.habitLog || {}).filter(v => v).length;
+        productive++;
     });
-    document.getElementById('statTotal').textContent = done;
-    document.getElementById('statRate').textContent = added > 0 ? Math.round((done / added) * 100) + '%' : '0%';
+    const possible = trackedDays.length * Math.max(1, db.habits.length);
+    const rate = possible > 0 ? Math.round((totalDone / possible) * 100) : 0;
+    document.getElementById('statTotal').textContent = totalDone;
+    document.getElementById('statRate').textContent = rate + '%';
     document.getElementById('statProductiveDays').textContent = productive;
     renderStreak();
 }
 
-// ─── CALENDAR ────────────────────────────────────────────
+// ─── CALENDAR (habit-based) ───────────────────────────
 function renderCalendar() {
     const grid = document.getElementById('calendarGrid');
     const label = document.getElementById('calMonthLabel');
@@ -625,6 +632,7 @@ function renderCalendar() {
     const firstDay = new Date(calYear, calMonth, 1).getDay();
     const days = new Date(calYear, calMonth + 1, 0).getDate();
     const today = todayKey();
+    const total = db.habits.length;
 
     for (let i = 0; i < firstDay; i++) {
         const e = document.createElement('div'); e.className = 'cal-day cal-empty'; grid.appendChild(e);
@@ -634,15 +642,14 @@ function renderCalendar() {
         const div = document.createElement('div');
         div.className = 'cal-day';
         div.textContent = d;
-        const day = db.days[key];
-        const has = day && day.tasks.length > 0;
-        const any = has && day.tasks.some(t => t.done);
-        const all = has && day.tasks.every(t => t.done);
+        const log = db.days[key]?.habitLog || {};
+        const doneCount = Object.values(log).filter(v => v).length;
+        const any = doneCount > 0;
+        const all = total > 0 && doneCount >= total;
         if (key === today) div.classList.add('cal-today');
-        if (key === selectedKey && key !== today) div.classList.add('cal-selected');
         if (all) div.classList.add('cal-done');
         else if (any) div.classList.add('cal-partial');
-        div.addEventListener('click', () => { selectedKey = key; renderCalendar(); renderTasks(); });
+        div.addEventListener('click', () => { renderCalendar(); });
         grid.appendChild(div);
     }
 }
@@ -654,93 +661,9 @@ document.getElementById('calNext').addEventListener('click', () => {
     if (++calMonth > 11) { calMonth = 0; calYear++; } renderCalendar();
 });
 
-// ─── TASKS ───────────────────────────────────────────────
-function renderTasks() {
-    const list = document.getElementById('taskList');
-    const empty = document.getElementById('tasksEmpty');
-    const badge = document.getElementById('taskCountBadge');
-    const label = document.getElementById('taskDateLabel');
-    const day = getDay(selectedKey);
-    const done = day.tasks.filter(t => t.done).length;
-
-    const isToday = selectedKey === todayKey();
-    const d = new Date(selectedKey + 'T12:00:00');
-    label.textContent = isToday ? "Today's Tasks"
-        : `Tasks · ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-    badge.textContent = `${done}/${day.tasks.length}`;
-    list.innerHTML = '';
-    empty.style.display = day.tasks.length === 0 ? 'block' : 'none';
-
-    day.tasks.forEach(task => {
-        const li = document.createElement('li'); li.className = 'task-item';
-        const cb = document.createElement('div');
-        cb.className = 'task-checkbox' + (task.done ? ' checked' : '');
-        cb.addEventListener('click', () => toggleTask(selectedKey, task.id));
-        const txt = document.createElement('span');
-        txt.className = 'task-text' + (task.done ? ' done' : '');
-        txt.textContent = task.text;
-        const del = document.createElement('button');
-        del.className = 'task-delete'; del.innerHTML = '✕';
-        del.addEventListener('click', () => deleteTask(selectedKey, task.id));
-        li.appendChild(cb); li.appendChild(txt); li.appendChild(del);
-        list.appendChild(li);
-    });
-
-    renderCharts(); renderStats(); renderCalendar(); renderHeatmap(); renderAchievements();
-}
-
-function addTask(text) {
-    if (!text.trim()) return;
-    const day = getDay(selectedKey);
-    day.tasks.push({ id: crypto.randomUUID(), text: text.trim(), done: false, tier: 'silver' });
-    day.totalAdded++;
-    scheduleSave(); renderTasks(); showToast('✦ Task added!');
-}
-
-function toggleTask(key, id) {
-    const day = getDay(key);
-    const task = day.tasks.find(t => t.id === id);
-    if (!task) return;
-    const xpAmt = TIERS[task.tier]?.xp ?? XP_PER_TASK;
-    if (!task.done) {
-        task.done = true; day.totalDone++;
-        addXP(xpAmt);
-        showToast(`⚡ +${xpAmt} XP — Task complete!`);
-        triggerCheckAnim();
-        playSound('task_complete');
-    } else {
-        task.done = false; day.totalDone = Math.max(0, day.totalDone - 1);
-        db.xp = Math.max(0, db.xp - xpAmt);
-        db.level = calcLevel(db.xp);
-        renderXPBar(); renderLevelBadge();
-    }
-    scheduleSave(); renderTasks();
-}
-
-function deleteTask(key, id) {
-    const day = getDay(key);
-    const idx = day.tasks.findIndex(t => t.id === id);
-    if (idx === -1) return;
-    if (day.tasks[idx].done) {
-        day.totalDone--;
-        const xpAmt = TIERS[day.tasks[idx].tier]?.xp ?? XP_PER_TASK;
-        db.xp = Math.max(0, db.xp - xpAmt);
-        db.level = calcLevel(db.xp);
-        renderXPBar(); renderLevelBadge();
-    }
-    day.tasks.splice(idx, 1);
-    scheduleSave(); renderTasks();
-}
-
-document.getElementById('addTaskBtn').addEventListener('click', () => {
-    const inp = document.getElementById('taskInput');
-    addTask(inp.value); inp.value = ''; inp.focus();
-});
-document.getElementById('taskInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { addTask(e.target.value); e.target.value = ''; }
-});
 
 // ─── HABITS ──────────────────────────────────────────────
+
 function addHabit(text, tier) {
     if (!text.trim()) return;
     db.habits.push({ id: crypto.randomUUID(), text: text.trim(), tier: tier || 'silver' });
@@ -786,7 +709,8 @@ function toggleHabitToday(id) {
         db.level = calcLevel(db.xp);
         renderXPBar(); renderLevelBadge();
     }
-    scheduleSave(); renderHabits(); renderStats(); renderAchievements();
+    scheduleSave();
+    renderHabits(); renderStats(); renderCharts(); renderCalendar(); renderHeatmap(); renderAchievements();
 }
 
 function renderHabits() {
@@ -849,7 +773,7 @@ document.getElementById('habitInput')?.addEventListener('keydown', e => {
     }
 });
 
-// ─── BAR CHART ───────────────────────────────────────────
+// ─── BAR CHART (habit-based) ───────────────────────────
 function renderBarChart() {
     const chart = document.getElementById('barChart');
     chart.innerHTML = '';
@@ -859,42 +783,48 @@ function renderBarChart() {
         const d = new Date(today); d.setDate(today.getDate() - (6 - i));
         return { key: fmtKey(d), label: DAYS[d.getDay()] };
     });
-    const maxT = Math.max(...days7.map(({ key }) => db.days[key]?.tasks.length || 0), 1);
+    const total = Math.max(1, db.habits.length);
+    const maxDone = Math.max(...days7.map(({ key }) => {
+        const log = db.days[key]?.habitLog || {};
+        return Object.values(log).filter(v => v).length;
+    }), 1);
 
     days7.forEach(({ key, label }) => {
-        const d = db.days[key], total = d?.tasks.length || 0;
-        const done = d?.tasks.filter(t => t.done).length || 0, pending = total - done;
-        const H = Math.round((total / maxT) * 140);
+        const log = db.days[key]?.habitLog || {};
+        const done = Object.values(log).filter(v => v).length;
+        const pending = Math.max(0, total - done);
+        const H = Math.round((done / maxDone) * 140);
         const grp = document.createElement('div'); grp.className = 'bar-group';
         const vl = document.createElement('div'); vl.className = 'bar-value-label';
-        vl.textContent = total > 0 ? `${done}/${total}` : '';
+        vl.textContent = done > 0 ? `${done}/${total}` : '';
         const stk = document.createElement('div'); stk.className = 'bar-stack';
-        if (key === selectedKey) { stk.style.outline = '2px solid var(--accent-2)'; stk.style.outlineOffset = '2px'; }
         if (done > 0) {
             const fd = document.createElement('div'); fd.className = 'bar-fill-completed';
-            fd.style.height = Math.round((done / Math.max(1, total)) * H) + 'px'; stk.appendChild(fd);
+            fd.style.height = Math.round((done / total) * H) + 'px'; stk.appendChild(fd);
         }
-        if (pending > 0) {
+        if (pending > 0 && done > 0) {
             const fp = document.createElement('div'); fp.className = 'bar-fill-pending';
-            fp.style.height = Math.round((pending / Math.max(1, total)) * H) + 'px'; stk.appendChild(fp);
+            fp.style.height = Math.round((pending / total) * H) + 'px'; stk.appendChild(fp);
         }
-        if (!total) { stk.style.minHeight = '4px'; stk.style.background = 'var(--bar-bg)'; }
+        if (!done) { stk.style.minHeight = '4px'; stk.style.background = 'var(--bar-bg)'; }
         const dl = document.createElement('div'); dl.className = 'bar-day-label'; dl.textContent = label;
         grp.appendChild(vl); grp.appendChild(stk); grp.appendChild(dl);
         chart.appendChild(grp);
     });
 }
 
-// ─── DONUT ───────────────────────────────────────────────
+// ─── DONUT (habit-based) ──────────────────────────────
 function renderDonut() {
     const now = new Date(), y = now.getFullYear(), m = now.getMonth();
     const days = new Date(y, m + 1, 0).getDate();
-    let added = 0, done = 0;
+    let done = 0;
+    const total = db.habits.length;
     for (let d = 1; d <= days; d++) {
         const row = db.days[`${y}-${pad(m + 1)}-${pad(d)}`];
-        if (row) { added += row.tasks.length; done += row.tasks.filter(t => t.done).length; }
+        if (row?.habitLog) done += Object.values(row.habitLog).filter(v => v).length;
     }
-    const pct = added > 0 ? Math.round((done / added) * 100) : 0;
+    const possible = days * Math.max(1, total);
+    const pct = possible > 0 ? Math.round((done / possible) * 100) : 0;
     const circ = 2 * Math.PI * 48;
     document.getElementById('donutFill').style.strokeDashoffset = circ - (pct / 100) * circ;
     document.getElementById('donutPct').textContent = pct + '%';
@@ -902,45 +832,57 @@ function renderDonut() {
 
 function renderCharts() { renderBarChart(); renderDonut(); }
 
-// ─── HEATMAP ─────────────────────────────────────────────
+// ─── HEATMAP (habit-based) ────────────────────────────
 function renderHeatmap() {
     const grid = document.getElementById('heatmapGrid');
     grid.innerHTML = '';
+    const total = Math.max(1, db.habits.length);
     for (let i = 97; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
-        const key = fmtKey(d), day = db.days[key];
+        const key = fmtKey(d);
+        const log = db.days[key]?.habitLog || {};
+        const done = Object.values(log).filter(v => v).length;
         let lv = 0;
-        if (day && day.tasks.length > 0) {
-            const r = day.tasks.filter(t => t.done).length / day.tasks.length;
+        if (done > 0) {
+            const r = done / total;
             lv = r >= .9 ? 4 : r >= .65 ? 3 : r >= .35 ? 2 : 1;
         }
         const cell = document.createElement('div');
         cell.className = `heatmap-cell l${lv}`;
-        cell.title = `${key}: ${day?.tasks.filter(t => t.done).length || 0}/${day?.tasks.length || 0} tasks`;
+        cell.title = `${key}: ${done}/${total} habits`;
         grid.appendChild(cell);
     }
 }
 
-// ─── ACHIEVEMENTS ────────────────────────────────────────
+// ─── ACHIEVEMENTS (habit-based) ──────────────────────────
 const ACHIEVEMENTS = [
-    { id: 'first', icon: '🌱', name: 'First Step', desc: 'Complete your first task', check: () => totalDone() >= 1 },
-    { id: 'ten', icon: '🚀', name: 'Getting Airborne', desc: 'Complete 10 tasks total', check: () => totalDone() >= 10 },
-    { id: 'fifty', icon: '⚡', name: 'Power User', desc: 'Complete 50 tasks total', check: () => totalDone() >= 50 },
+    { id: 'first', icon: '🌱', name: 'First Step', desc: 'Complete your first habit', check: () => totalDoneHabits() >= 1 },
+    { id: 'ten', icon: '🚀', name: 'Getting Airborne', desc: 'Complete 10 habits total', check: () => totalDoneHabits() >= 10 },
+    { id: 'fifty', icon: '⚡', name: 'Power User', desc: 'Complete 50 habits total', check: () => totalDoneHabits() >= 50 },
     { id: 'str3', icon: '🔥', name: 'On Fire', desc: '3-day streak', check: () => calcStreak() >= 3 },
     { id: 'str7', icon: '💫', name: 'Week Warrior', desc: '7-day streak', check: () => calcStreak() >= 7 },
     { id: 'lv5', icon: '🏆', name: 'Champion', desc: 'Reach level 5', check: () => db.level >= 5 },
-    { id: 'perfect', icon: '✅', name: 'Perfectionist', desc: 'All tasks done in one day', check: () => Object.values(db.days).some(d => d.tasks.length > 0 && d.tasks.every(t => t.done)) },
+    {
+        id: 'perfect', icon: '✅', name: 'Perfectionist', desc: 'All habits done in one day',
+        check: () => db.habits.length > 0 && Object.values(db.days).some(d => {
+            const done = Object.values(d.habitLog || {}).filter(v => v).length;
+            return done >= db.habits.length;
+        })
+    },
     {
         id: 'month15', icon: '📅', name: 'Half Month', desc: '15+ productive days in a month',
         check: () => {
             const now = new Date(), prefix = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-            return Object.keys(db.days).filter(k => k.startsWith(prefix) && db.days[k].tasks.some(t => t.done)).length >= 15;
+            return Object.keys(db.days).filter(k =>
+                k.startsWith(prefix) && Object.values(db.days[k].habitLog || {}).some(v => v)
+            ).length >= 15;
         }
     },
 ];
 
-function totalDone() {
-    return Object.values(db.days).reduce((s, d) => s + d.tasks.filter(t => t.done).length, 0);
+function totalDoneHabits() {
+    return Object.values(db.days).reduce((s, d) =>
+        s + Object.values(d.habitLog || {}).filter(v => v).length, 0);
 }
 
 // \u2500\u2500\u2500 AUDIO SYSTEM \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -1255,11 +1197,11 @@ function triggerTotemAnim(tier) {
 // ─── RENDER ALL ──────────────────────────────────────────
 function renderAll() {
     renderQuote(); renderXPBar(); renderLevelBadge();
-    renderCalendar(); renderTasks(); renderHabits(); renderHeatmap();
-    renderStats(); renderAchievements();
+    renderCalendar(); renderHabits(); renderHeatmap();
+    renderStats(); renderCharts(); renderAchievements();
     updateHeaderAvatar();
-    document.querySelectorAll('.card').forEach((c, i) => { c.style.animationDelay = `${i * 50}ms`; });
 }
+
 
 // Kick off — show auth screen; onAuthStateChanged handles the rest
 showAuthScreen();
