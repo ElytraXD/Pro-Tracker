@@ -957,17 +957,19 @@ function renderBarChart() {
 
 // ─── DONUT (habit-based) ──────────────────────────────
 function renderDonut() {
-    const now = new Date(), y = now.getFullYear(), m = now.getMonth();
-    const days = new Date(y, m + 1, 0).getDate();
+    const d = new Date();
+    const key = fmtKey(d);
+
     let done = 0;
     const total = db.habits.length;
-    for (let d = 1; d <= days; d++) {
-        const row = db.days[`${y}-${pad(m + 1)}-${pad(d)}`];
-        if (row?.habitLog) done += Object.values(row.habitLog).filter(v => v).length;
-    }
-    const possible = days * Math.max(1, total);
-    const pct = possible > 0 ? Math.round((done / possible) * 100) : 0;
+
+    const row = db.days[key];
+    if (row?.habitLog) done += Object.values(row.habitLog).filter(v => v).length;
+
+    const possible = Math.max(1, total);
+    const pct = total > 0 ? Math.round((done / possible) * 100) : 0;
     const circ = 2 * Math.PI * 48;
+
     document.getElementById('donutFill').style.strokeDashoffset = circ - (pct / 100) * circ;
     document.getElementById('donutPct').textContent = pct + '%';
 }
