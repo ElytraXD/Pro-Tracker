@@ -676,7 +676,7 @@ function renderCalendar() {
         const key = `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
         const div = document.createElement('div');
         div.className = 'cal-day';
-        div.textContent = d;
+
         const log = db.days[key]?.habitLog || {};
         const doneCount = Object.values(log).filter(v => v).length;
         const any = doneCount > 0;
@@ -685,11 +685,33 @@ function renderCalendar() {
         if (all) div.classList.add('cal-done');
         else if (any) div.classList.add('cal-partial');
 
-        // Event marker
-        const evt = db.events?.[key];
-        if (evt) {
+        // Day number
+        const numEl = document.createElement('span');
+        numEl.className = 'cal-day-num';
+        numEl.textContent = d;
+        div.appendChild(numEl);
+
+        // Multi-event emoji cluster
+        const events = _getEvents(key);
+        if (events.length > 0) {
             div.classList.add('cal-event');
-            div.setAttribute('data-event-emoji', evt.emoji || '⭐');
+            const cluster = document.createElement('div');
+            cluster.className = 'cal-emoji-cluster';
+            const show = events.slice(0, 3);
+            show.forEach(ev => {
+                const s = document.createElement('span');
+                s.className = 'cal-emoji-pill';
+                s.textContent = ev.emoji || '⭐';
+                s.title = ev.text;
+                cluster.appendChild(s);
+            });
+            if (events.length > 3) {
+                const more = document.createElement('span');
+                more.className = 'cal-emoji-more';
+                more.textContent = `+${events.length - 3}`;
+                cluster.appendChild(more);
+            }
+            div.appendChild(cluster);
         }
 
         div.addEventListener('click', () => openEventModal(key));
@@ -697,9 +719,34 @@ function renderCalendar() {
     }
 }
 
+
 // ─── CALENDAR EVENTS ─────────────────────────────────────
-const EVENT_EMOJIS = ['🎂', '🎉', '🏆', '💼', '✈️', '❤️', '🎯', '📅', '🎊', '⭐', '🔔', '💡'];
+const EVENT_EMOJIS = ['🎂', '🎉', '🏆', '💼', '✈️', '❤️', '🎯', '📅', '🎊', '⭐', '🔔', '💡', '🎵', '🌟', '🎁', '🔥'];
 let _eventModalKey = null;
+
+function _getEvents(dateKey) {
+    const raw = db.events?.[dateKey];
+    if (!raw) return [];
+    // Migrate old single-event object → array
+    if (!Array.isArray(raw)) return [raw];
+    return raw;
+}
+
+function _renderExistingEvents() {
+    const list = document.getElementById('eventExistingList');
+    if (!list) return;
+    const events = _getEvents(_eventModalKey);
+    if (events.length === 0) {
+        list.innerHTML = '<div class="event-empty-hint">No events yet — add one below.</div>';
+        return;
+    }
+    list.innerHTML = events.map((ev, i) => `
+        <div class="event-existing-item">
+            <span class="event-existing-emoji">${ev.emoji || '⭐'}</span>
+            <span class="event-existing-text">${ev.text}</span>
+            <button class="event-item-del" onclick="deleteEventByIndex(${i})" title="Remove">✕</button>
+        </div>`).join('');
+}
 
 function openEventModal(dateKey) {
     _eventModalKey = dateKey;
@@ -707,23 +754,21 @@ function openEventModal(dateKey) {
     const dateLabel = document.getElementById('eventDateLabel');
     const input = document.getElementById('eventInput');
     const emojiGrid = document.getElementById('eventEmojiGrid');
-    const deleteBtn = document.getElementById('eventDeleteBtn');
 
-    // Format date nicely
+    // Format date
     const [y, m, d] = dateKey.split('-');
     const dateObj = new Date(y, m - 1, d);
-    const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    dateLabel.textContent = dateObj.toLocaleDateString('en-US', opts);
+    dateLabel.textContent = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    const existing = db.events?.[dateKey];
-    input.value = existing?.text || '';
+    // Render existing events
+    _renderExistingEvents();
 
-    // Render emoji picker
+    // Emoji picker (default ⭐ selected)
+    input.value = '';
     emojiGrid.innerHTML = '';
-    const selectedEmoji = existing?.emoji || '⭐';
-    EVENT_EMOJIS.forEach(em => {
+    EVENT_EMOJIS.forEach((em, idx) => {
         const btn = document.createElement('button');
-        btn.className = 'event-emoji-btn' + (em === selectedEmoji ? ' selected' : '');
+        btn.className = 'event-emoji-btn' + (idx === 0 ? ' selected' : '');
         btn.textContent = em;
         btn.addEventListener('click', () => {
             emojiGrid.querySelectorAll('.event-emoji-btn').forEach(b => b.classList.remove('selected'));
@@ -732,7 +777,6 @@ function openEventModal(dateKey) {
         emojiGrid.appendChild(btn);
     });
 
-    deleteBtn.style.display = existing ? 'block' : 'none';
     overlay.style.display = 'flex';
     setTimeout(() => input.focus(), 100);
 }
@@ -749,33 +793,43 @@ function saveEvent() {
     const selected = document.querySelector('.event-emoji-btn.selected');
     const emoji = selected ? selected.textContent : '⭐';
     if (!db.events) db.events = {};
-    db.events[_eventModalKey] = { text, emoji };
+    const existing = _getEvents(_eventModalKey);
+    existing.push({ text, emoji });
+    db.events[_eventModalKey] = existing;
     scheduleSave();
     renderCalendar();
-    closeEventModal();
-    showToast(`${emoji} Event saved!`);
+    _renderExistingEvents();
+    // Clear input, reset emoji to first
+    document.getElementById('eventInput').value = '';
+    document.querySelectorAll('.event-emoji-btn').forEach((b, i) => b.classList.toggle('selected', i === 0));
+    showToast(`${emoji} Event added!`);
 }
 
-function deleteEvent() {
-    if (!_eventModalKey || !db.events?.[_eventModalKey]) return;
-    delete db.events[_eventModalKey];
+function deleteEventByIndex(idx) {
+    if (!_eventModalKey) return;
+    const events = _getEvents(_eventModalKey);
+    events.splice(idx, 1);
+    if (events.length === 0) {
+        delete db.events[_eventModalKey];
+    } else {
+        db.events[_eventModalKey] = events;
+    }
     scheduleSave();
     renderCalendar();
-    closeEventModal();
+    _renderExistingEvents();
     showToast('🗑️ Event removed.');
 }
 
 // Today's event popup — shown once per login
 function checkTodayEvent() {
-    const evt = db.events?.[todayKey()];
-    if (!evt) return;
+    const events = _getEvents(todayKey());
+    if (!events.length) return;
     const popup = document.getElementById('eventPopup');
-    const popupEmoji = document.getElementById('eventPopupEmoji');
-    const popupText = document.getElementById('eventPopupText');
     if (!popup) return;
-
-    popupEmoji.textContent = evt.emoji || '⭐';
-    popupText.textContent = evt.text;
+    // Show first event in the popup
+    document.getElementById('eventPopupEmoji').textContent = events[0].emoji || '⭐';
+    document.getElementById('eventPopupText').textContent =
+        events.length > 1 ? `${events[0].text} (+${events.length - 1} more)` : events[0].text;
     popup.style.display = 'flex';
     triggerConfetti();
     playSound('achievement');
@@ -796,6 +850,7 @@ document.getElementById('eventPopup')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) closeEventPopup();
 });
 
+
 document.getElementById('calPrev').addEventListener('click', () => {
     if (--calMonth < 0) { calMonth = 11; calYear--; } renderCalendar();
 });
@@ -809,7 +864,7 @@ document.getElementById('calNext').addEventListener('click', () => {
 function addHabit(text, tier) {
     if (!text.trim()) return;
     db.habits.push({ id: crypto.randomUUID(), text: text.trim(), tier: tier || 'silver' });
-    scheduleSave(); renderHabits(); showToast(`${TIERS[tier]?.icon} Habit added!`);
+    scheduleSave(); renderHabits(); renderStats(); renderCharts(); renderAchievements(); showToast(`${TIERS[tier]?.icon} Habit added!`);
 }
 
 function deleteHabit(id) {
@@ -824,8 +879,13 @@ function deleteHabit(id) {
             renderXPBar(); renderLevelBadge();
         }
     }
+    // Remove this habit's log entry from ALL days so charts don't count it
+    Object.values(db.days).forEach(day => {
+        if (day.habitLog) delete day.habitLog[id];
+    });
     db.habits = db.habits.filter(h => h.id !== id);
-    scheduleSave(); renderHabits();
+    scheduleSave();
+    renderHabits(); renderStats(); renderCharts(); renderCalendar(); renderHeatmap(); renderAchievements();
 }
 
 function toggleHabitToday(id) {
@@ -1000,6 +1060,14 @@ function renderHeatmap() {
 
 // ─── ACHIEVEMENTS (habit-based) ──────────────────────────
 const ACHIEVEMENTS = [
+    {
+        id: 'perfect', icon: '✅', name: 'Perfectionist', desc: 'All habits done today — resets daily!',
+        daily: true,
+        check: () => db.habits.length > 0 && (() => {
+            const log = db.days[todayKey()]?.habitLog || {};
+            return Object.values(log).filter(v => v).length >= db.habits.length;
+        })()
+    },
     { id: 'first', icon: '🌱', name: 'First Step', desc: 'Complete your first habit', check: () => totalDoneHabits() >= 1 },
     { id: 'str2', icon: '�', name: 'Getting Started', desc: '2-day streak', check: () => calcStreak() >= 2 },
     { id: 'str4', icon: '⚡', name: 'Building Momentum', desc: '4-day streak', check: () => calcStreak() >= 4 },
@@ -1007,13 +1075,6 @@ const ACHIEVEMENTS = [
     { id: 'str15', icon: '�', name: 'Half Month Hero', desc: '15-day streak', check: () => calcStreak() >= 15 },
     { id: 'str21', icon: '🏆', name: 'Habit Master', desc: '21-day streak — habits are forged!', check: () => calcStreak() >= 21, sound: 'streak_21' },
     { id: 'str30', icon: '👑', name: 'Legendary', desc: '30-day streak — one full month!', check: () => calcStreak() >= 30 },
-    {
-        id: 'perfect', icon: '✅', name: 'Perfectionist', desc: 'All habits for today are done',
-        check: () => db.habits.length > 0 && (() => {
-            const log = db.days[todayKey()]?.habitLog || {};
-            return Object.values(log).filter(v => v).length >= db.habits.length;
-        })()
-    },
 ];
 
 function totalDoneHabits() {
@@ -1159,22 +1220,52 @@ function renderAchievements() {
     list.innerHTML = ''; let dirty = false;
     ACHIEVEMENTS.forEach(a => {
         const ok = a.check();
-        if (ok && !db.unlocked[a.id]) {
-            db.unlocked[a.id] = true; dirty = true;
-            showAchievementToast(a);
-            if (a.sound) { triggerConfetti(); }
-        }
-        const el = document.createElement('div');
-        el.className = `achievement-item ${ok ? 'unlocked' : 'locked'}`;
-        el.innerHTML = `<span class="achievement-icon">${a.icon}</span>
+        let isUnlocked;
+
+        if (a.daily) {
+            isUnlocked = ok;
+            const earnedDate = db.unlocked[a.id];
+            const alreadyFiredToday = earnedDate === todayKey();
+            if (ok && !alreadyFiredToday) {
+                db.unlocked[a.id] = todayKey(); dirty = true;
+                showAchievementToast(a);
+                if (a.sound) triggerConfetti();
+            } else if (!ok && alreadyFiredToday) {
+                delete db.unlocked[a.id]; dirty = true;
+            }
+
+            // ── Hero card layout for daily achievements ──
+            const el = document.createElement('div');
+            el.className = `achievement-item perfect-hero ${isUnlocked ? 'unlocked' : 'locked'}`;
+            el.innerHTML = `
+                <span class="achievement-icon">${a.icon}</span>
+                <div class="achievement-name">${a.name}</div>
+                <div class="achievement-desc">${a.desc}</div>
+                <span class="perfect-daily-badge">✦ Daily</span>
+                ${isUnlocked ? '<span class="perfect-hero-check">✓ Completed Today</span>' : ''}`;
+            list.appendChild(el);
+        } else {
+            // One-time achievement — normal row
+            if (ok && !db.unlocked[a.id]) {
+                db.unlocked[a.id] = true; dirty = true;
+                showAchievementToast(a);
+                if (a.sound) { triggerConfetti(); }
+            }
+            isUnlocked = !!db.unlocked[a.id];
+
+            const el = document.createElement('div');
+            el.className = `achievement-item ${isUnlocked ? 'unlocked' : 'locked'}`;
+            el.innerHTML = `<span class="achievement-icon">${a.icon}</span>
       <div class="achievement-info">
         <div class="achievement-name">${a.name}</div>
         <div class="achievement-desc">${a.desc}</div>
-      </div>${ok ? '<span style="color:var(--accent-3);font-size:16px;">✓</span>' : ''}`;
-        list.appendChild(el);
+      </div>${isUnlocked ? '<span style="color:var(--accent-3);font-size:16px;">✓</span>' : ''}`;
+            list.appendChild(el);
+        }
     });
     if (dirty) scheduleSave();
 }
+
 
 // ─── THEME ───────────────────────────────────────────────
 function setTheme(t) {

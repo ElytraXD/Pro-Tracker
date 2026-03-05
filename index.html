@@ -309,17 +309,20 @@
             <button class="profile-close" onclick="closeEventModal()" aria-label="Close">✕</button>
             <div class="event-modal-header">
                 <span class="event-modal-icon">📅</span>
-                <span class="event-modal-title">Calendar Event</span>
+                <span class="event-modal-title">Calendar Events</span>
             </div>
             <div class="event-date-label" id="eventDateLabel"></div>
-            <div class="event-emoji-label">Choose an icon</div>
-            <div class="event-emoji-grid" id="eventEmojiGrid"></div>
-            <input type="text" id="eventInput" class="auth-input event-input" placeholder="What's happening this day?"
-                maxlength="80" />
-            <div class="event-modal-actions">
-                <button class="auth-btn event-save-btn" onclick="saveEvent()">Save Event</button>
-                <button class="event-delete-btn" id="eventDeleteBtn" onclick="deleteEvent()" style="display:none;">🗑️
-                    Remove</button>
+
+            <!-- Existing events list -->
+            <div class="event-existing-list" id="eventExistingList"></div>
+
+            <!-- Add new event form -->
+            <div class="event-add-section">
+                <div class="event-emoji-label">Pick an icon</div>
+                <div class="event-emoji-grid" id="eventEmojiGrid"></div>
+                <input type="text" id="eventInput" class="auth-input event-input"
+                    placeholder="What's happening this day?" maxlength="80" />
+                <button class="auth-btn event-save-btn" onclick="saveEvent()">＋ Add Event</button>
             </div>
         </div>
     </div>
