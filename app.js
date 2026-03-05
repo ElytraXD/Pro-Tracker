@@ -864,7 +864,7 @@ document.getElementById('calNext').addEventListener('click', () => {
 function addHabit(text, tier) {
     if (!text.trim()) return;
     db.habits.push({ id: crypto.randomUUID(), text: text.trim(), tier: tier || 'silver' });
-    scheduleSave(); renderHabits(); renderStats(); renderCharts(); renderAchievements(); showToast(`${TIERS[tier]?.icon} Habit added!`);
+    scheduleSave(); renderHabits(); renderStats(); renderCharts(); renderHeatmap(); renderAchievements(); showToast(`${TIERS[tier]?.icon} Habit added!`);
 }
 
 function deleteHabit(id) {
