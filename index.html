@@ -245,6 +245,27 @@
                 <div class="tasks-empty" id="habitsEmpty"><span>No habits yet. Add one above! 🔁</span></div>
             </div>
 
+            <!-- TODO CARD -->
+            <div class="card todo-card">
+                <div class="card-header">
+                    <span class="card-icon">☑️</span>
+                    <span class="card-title">To-Do List</span>
+                </div>
+                <div class="habit-input-row" style="margin-top: 10px;">
+                    <select class="tier-select" id="todoTierSelect">
+                        <option value="silver">🥈 Silver</option>
+                        <option value="gold">🥇 Gold</option>
+                        <option value="diamond">💎 Diamond</option>
+                        <option value="aujla">🔱 Karan Aujla</option>
+                    </select>
+                    <input type="text" id="todoInput" class="task-input" placeholder="Add a one-time task…"
+                        maxlength="60" />
+                    <button class="add-task-btn" id="addTodoBtn">+</button>
+                </div>
+                <ul class="task-list" id="todoList"></ul>
+                <div class="tasks-empty" id="todosEmpty"><span>No tasks right now! ☑️</span></div>
+            </div>
+
             <div class="card calendar-card">
                 <div class="card-header">
                     <span class="card-icon">◎</span>

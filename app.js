@@ -34,7 +34,7 @@ let calMonth = new Date().getMonth();
 let selectedKey = todayKey();
 
 function defaultDB() {
-    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], events: {}, displayName: '', avatar: '' };
+    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], todos: [], events: {}, displayName: '', avatar: '' };
 }
 
 // ─── DATE HELPERS ────────────────────────────────────────
@@ -65,6 +65,7 @@ async function pushCloud() {
             theme: db.theme,
             unlocked: db.unlocked,
             habits: db.habits,
+            todos: db.todos || [],
             events: db.events || {},
             displayName: db.displayName || '',
             avatar: db.avatar || '',
@@ -100,6 +101,7 @@ async function pullCloud() {
             db.theme = p.theme || 'dark';
             db.unlocked = p.unlocked || {};
             db.habits = p.habits || [];
+            db.todos = p.todos || [];
             db.events = p.events || {};
             db.displayName = p.displayName || '';
             db.avatar = p.avatar || '';
@@ -975,6 +977,129 @@ document.getElementById('habitInput')?.addEventListener('keydown', e => {
     }
 });
 
+// ─── TODOS ──────────────────────────────────────────────
+
+function addTodo(text, tier) {
+    if (!text.trim()) return;
+    if (!db.todos) db.todos = [];
+    db.todos.push({ id: crypto.randomUUID(), text: text.trim(), tier: tier || 'silver' });
+    scheduleSave();
+    renderTodos();
+    showToast(`${TIERS[tier]?.icon || '☑️'} Task added!`);
+}
+
+function completeTodo(id) {
+    if (!db.todos) return;
+    const todo = db.todos.find(t => t.id === id);
+    if (!todo) return;
+
+    const xpAmt = TIERS[todo.tier]?.xp ?? 10;
+
+    const li = document.getElementById(`todo-${id}`);
+    if (li) {
+        li.style.transform = 'scale(0.9)';
+        li.style.opacity = '0';
+        li.style.transition = 'all 0.3s ease-out';
+
+        const cb = li.querySelector('.task-checkbox');
+        if (cb) cb.classList.add('checked');
+
+        setTimeout(() => {
+            db.todos = db.todos.filter(t => t.id !== id);
+            scheduleSave();
+            renderTodos();
+            showToast(`${TIERS[todo.tier]?.icon || '✓'} +${xpAmt} XP — "${todo.text}" completed!`);
+            addXP(xpAmt);
+            if (todo.tier === 'diamond' || todo.tier === 'aujla') {
+                triggerTotemAnim(todo.tier);
+                playSound('totem');
+            } else {
+                playSound('task_complete');
+            }
+        }, 300);
+    } else {
+        db.todos = db.todos.filter(t => t.id !== id);
+        scheduleSave();
+        renderTodos();
+        showToast(`${TIERS[todo.tier]?.icon || '✓'} +${xpAmt} XP — "${todo.text}" completed!`);
+        addXP(xpAmt);
+        if (todo.tier === 'diamond' || todo.tier === 'aujla') {
+            triggerTotemAnim(todo.tier);
+            playSound('totem');
+        } else {
+            playSound('task_complete');
+        }
+    }
+}
+
+function deleteTodo(id) {
+    if (!db.todos) return;
+    db.todos = db.todos.filter(t => t.id !== id);
+    scheduleSave();
+    renderTodos();
+}
+
+function renderTodos() {
+    const list = document.getElementById('todoList');
+    const empty = document.getElementById('todosEmpty');
+    if (!list) return;
+    if (!db.todos) db.todos = [];
+    list.innerHTML = '';
+    empty.style.display = db.todos.length === 0 ? 'block' : 'none';
+
+    db.todos.forEach(todo => {
+        const tier = TIERS[todo.tier] || TIERS.silver;
+        const li = document.createElement('li');
+        li.className = `task-item habit-item ${tier.cls}`; // Reuse styling but apply tier class
+        // Make tasks slightly brighter as requested
+        li.style.background = 'var(--panel-bg)';
+        li.style.border = '1px solid var(--border)';
+        li.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+        li.id = `todo-${todo.id}`;
+
+        const cb = document.createElement('div');
+        cb.className = 'task-checkbox';
+        cb.addEventListener('click', () => completeTodo(todo.id));
+
+        const badge = document.createElement('span');
+        badge.className = `tier-badge ${tier.cls}`;
+        badge.title = `${tier.label} · ${tier.xp} XP`;
+        badge.textContent = tier.icon;
+
+        const txt = document.createElement('span');
+        txt.className = 'task-text';
+        txt.textContent = todo.text;
+
+        const xpTag = document.createElement('span');
+        xpTag.className = `tier-xp-tag ${tier.cls}`;
+        xpTag.textContent = `+${tier.xp}`;
+
+        const del = document.createElement('button');
+        del.className = 'task-delete';
+        del.innerHTML = '✕';
+        del.addEventListener('click', () => deleteTodo(todo.id));
+
+        li.appendChild(cb);
+        li.appendChild(badge);
+        li.appendChild(txt);
+        li.appendChild(xpTag);
+        li.appendChild(del);
+        list.appendChild(li);
+    });
+}
+
+document.getElementById('addTodoBtn')?.addEventListener('click', () => {
+    const inp = document.getElementById('todoInput');
+    const tier = document.getElementById('todoTierSelect').value;
+    addTodo(inp.value, tier); inp.value = ''; inp.focus();
+});
+document.getElementById('todoInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        const tier = document.getElementById('todoTierSelect').value;
+        addTodo(e.target.value, tier); e.target.value = '';
+    }
+});
+
 // ─── BAR / CURVE CHART ─────────────────────────────────
 let _chartMode = 'week'; // 'week' | 'month'
 
@@ -1534,10 +1659,9 @@ function triggerTotemAnim(tier) {
     setTimeout(() => em.remove(), 1500);
 }
 
-// ─── RENDER ALL ──────────────────────────────────────────
 function renderAll() {
     renderQuote(); renderXPBar(); renderLevelBadge();
-    renderCalendar(); renderHabits(); renderHeatmap();
+    renderCalendar(); renderHabits(); renderTodos(); renderHeatmap();
     renderStats(); renderCharts(); renderAchievements();
     updateHeaderAvatar();
 }
