@@ -34,7 +34,7 @@ let calMonth = new Date().getMonth();
 let selectedKey = todayKey();
 
 function defaultDB() {
-    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], todos: [], events: {}, displayName: '', avatar: '' };
+    return { theme: 'dark', xp: 0, level: 1, bestStreak: 0, unlocked: {}, days: {}, habits: [], todos: [], todosCompleted: 0, events: {}, displayName: '', avatar: '' };
 }
 
 // ─── DATE HELPERS ────────────────────────────────────────
@@ -66,6 +66,7 @@ async function pushCloud() {
             unlocked: db.unlocked,
             habits: db.habits,
             todos: db.todos || [],
+            todos_completed: db.todosCompleted || 0,
             events: db.events || {},
             displayName: db.displayName || '',
             avatar: db.avatar || '',
@@ -102,6 +103,7 @@ async function pullCloud() {
             db.unlocked = p.unlocked || {};
             db.habits = p.habits || [];
             db.todos = p.todos || [];
+            db.todosCompleted = p.todos_completed || 0;
             db.events = p.events || {};
             db.displayName = p.displayName || '';
             db.avatar = p.avatar || '';
@@ -510,7 +512,7 @@ document.getElementById('hardResetBtn')?.addEventListener('click', () => {
     if (!confirm('⚠️ Are you sure? This will delete ALL your progress permanently.')) return;
     if (!confirm('💀 Last chance! Hit OK to wipe everything and start from zero.')) return;
     db.xp = 0; db.level = 1; db.bestStreak = 0;
-    db.unlocked = {}; db.days = {}; db.habits = [];
+    db.unlocked = {}; db.days = {}; db.habits = []; db.todos = []; db.todosCompleted = 0;
     scheduleSave();
     renderAll(); renderProfile();
     showToast('💀 Everything has been reset.');
@@ -1006,10 +1008,12 @@ function completeTodo(id) {
 
         setTimeout(() => {
             db.todos = db.todos.filter(t => t.id !== id);
+            db.todosCompleted = (db.todosCompleted || 0) + 1;
             scheduleSave();
             renderTodos();
             showToast(`${TIERS[todo.tier]?.icon || '✓'} +${xpAmt} XP — "${todo.text}" completed!`);
             addXP(xpAmt);
+            renderAchievements();
             if (todo.tier === 'diamond' || todo.tier === 'aujla') {
                 triggerTotemAnim(todo.tier);
                 playSound('totem');
@@ -1019,10 +1023,12 @@ function completeTodo(id) {
         }, 300);
     } else {
         db.todos = db.todos.filter(t => t.id !== id);
+        db.todosCompleted = (db.todosCompleted || 0) + 1;
         scheduleSave();
         renderTodos();
         showToast(`${TIERS[todo.tier]?.icon || '✓'} +${xpAmt} XP — "${todo.text}" completed!`);
         addXP(xpAmt);
+        renderAchievements();
         if (todo.tier === 'diamond' || todo.tier === 'aujla') {
             triggerTotemAnim(todo.tier);
             playSound('totem');
@@ -1310,6 +1316,11 @@ const ACHIEVEMENTS = [
     { id: 'str15', icon: '�', name: 'Half Month Hero', desc: '15-day streak', check: () => calcStreak() >= 15 },
     { id: 'str21', icon: '🏆', name: 'Habit Master', desc: '21-day streak — habits are forged!', check: () => calcStreak() >= 21, sound: 'streak_21' },
     { id: 'str30', icon: '👑', name: 'Legendary', desc: '30-day streak — one full month!', check: () => calcStreak() >= 30 },
+    { id: 'task1', icon: '📝', name: 'First Task', desc: 'Complete your first to-do task', check: () => (db.todosCompleted || 0) >= 1 },
+    { id: 'task5', icon: '🎯', name: 'Task Lover', desc: 'Complete 5 to-do tasks', check: () => (db.todosCompleted || 0) >= 5 },
+    { id: 'task10', icon: '📋', name: 'Task Novice', desc: 'Complete 10 to-do tasks', check: () => (db.todosCompleted || 0) >= 10 },
+    { id: 'task20', icon: '🚀', name: 'Task Pro', desc: 'Complete 20 to-do tasks', check: () => (db.todosCompleted || 0) >= 20 },
+    { id: 'task50', icon: '🎯', name: 'Task Master', desc: 'Complete 50 to-do tasks', check: () => (db.todosCompleted || 0) >= 50 },
 ];
 
 function totalDoneHabits() {
