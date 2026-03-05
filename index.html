@@ -266,10 +266,16 @@
             <div class="card chart-card">
                 <div class="card-header">
                     <span class="card-icon">▬</span>
-                    <span class="card-title">Weekly Progress</span>
+                    <span class="card-title">Progress</span>
+                    <div class="chart-toggle" id="chartToggle">
+                        <button class="chart-toggle-btn active" id="chartWeekBtn"
+                            onclick="setChartMode('week')">Week</button>
+                        <button class="chart-toggle-btn" id="chartMonthBtn"
+                            onclick="setChartMode('month')">Month</button>
+                    </div>
                 </div>
-                <div class="bar-chart" id="barChart"></div>
-                <div class="bar-legend">
+                <div id="barChart" class="bar-chart"></div>
+                <div class="bar-legend" id="barLegend">
                     <span class="bar-legend-item"><span class="bl-box completed"></span>Completed</span>
                     <span class="bar-legend-item"><span class="bl-box pending"></span>Pending</span>
                 </div>

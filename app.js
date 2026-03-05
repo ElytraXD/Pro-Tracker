@@ -975,10 +975,25 @@ document.getElementById('habitInput')?.addEventListener('keydown', e => {
     }
 });
 
-// ─── BAR CHART (habit-based) ───────────────────────────
+// ─── BAR / CURVE CHART ─────────────────────────────────
+let _chartMode = 'week'; // 'week' | 'month'
+
+function setChartMode(mode) {
+    _chartMode = mode;
+    document.getElementById('chartWeekBtn')?.classList.toggle('active', mode === 'week');
+    document.getElementById('chartMonthBtn')?.classList.toggle('active', mode === 'month');
+    renderBarChart();
+}
+
 function renderBarChart() {
+    if (_chartMode === 'month') { renderMonthCurve(); return; }
+
+    // ── WEEKLY BARS ──
     const chart = document.getElementById('barChart');
+    chart.className = 'bar-chart';
     chart.innerHTML = '';
+    document.getElementById('barLegend').style.display = '';
+
     const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const today = new Date();
     const days7 = Array.from({ length: 7 }, (_, i) => {
@@ -986,34 +1001,129 @@ function renderBarChart() {
         return { key: fmtKey(d), label: DAYS[d.getDay()] };
     });
     const total = Math.max(1, db.habits.length);
-    const maxDone = Math.max(...days7.map(({ key }) => {
-        const log = db.days[key]?.habitLog || {};
-        return Object.values(log).filter(v => v).length;
-    }), 1);
+    const BAR_H = 140;
 
     days7.forEach(({ key, label }) => {
         const log = db.days[key]?.habitLog || {};
         const done = Object.values(log).filter(v => v).length;
-        const pending = Math.max(0, total - done);
-        const H = Math.round((done / maxDone) * 140);
+        const pct = Math.min(1, done / total); // completion ratio 0–1
+        const doneH = Math.round(pct * BAR_H);
+        const pendH = Math.round((1 - pct) * BAR_H);
+
         const grp = document.createElement('div'); grp.className = 'bar-group';
+
         const vl = document.createElement('div'); vl.className = 'bar-value-label';
-        vl.textContent = done > 0 ? `${done}/${total}` : '';
+        vl.textContent = done > 0 ? `${Math.round(pct * 100)}%` : '';
+
         const stk = document.createElement('div'); stk.className = 'bar-stack';
-        if (done > 0) {
+        stk.style.height = BAR_H + 'px';
+
+        if (doneH > 0) {
             const fd = document.createElement('div'); fd.className = 'bar-fill-completed';
-            fd.style.height = Math.round((done / total) * H) + 'px'; stk.appendChild(fd);
+            fd.style.height = doneH + 'px';
+            stk.appendChild(fd);
         }
-        if (pending > 0 && done > 0) {
+        if (pendH > 0 && done > 0) {
             const fp = document.createElement('div'); fp.className = 'bar-fill-pending';
-            fp.style.height = Math.round((pending / total) * H) + 'px'; stk.appendChild(fp);
+            fp.style.height = pendH + 'px';
+            stk.appendChild(fp);
         }
-        if (!done) { stk.style.minHeight = '4px'; stk.style.background = 'var(--bar-bg)'; }
+        if (!done) { stk.style.background = 'var(--bar-bg)'; stk.style.borderRadius = '6px'; }
+
         const dl = document.createElement('div'); dl.className = 'bar-day-label'; dl.textContent = label;
         grp.appendChild(vl); grp.appendChild(stk); grp.appendChild(dl);
         chart.appendChild(grp);
     });
 }
+
+function renderMonthCurve() {
+    // ── MONTHLY SVG AREA CURVE ──
+    const chart = document.getElementById('barChart');
+    chart.className = 'bar-chart month-curve-wrap';
+    document.getElementById('barLegend').style.display = 'none';
+
+    const W = 280, H = 140, PAD_X = 16, PAD_Y = 16;
+    const today = new Date();
+    const total = Math.max(1, db.habits.length);
+
+    // Build 30-day data points (pct completion each day)
+    const pts = Array.from({ length: 30 }, (_, i) => {
+        const d = new Date(today); d.setDate(today.getDate() - (29 - i));
+        const log = db.days[fmtKey(d)]?.habitLog || {};
+        const done = Object.values(log).filter(v => v).length;
+        return Math.min(1, done / total); // 0.0 – 1.0
+    });
+
+    // Map to SVG coords
+    const xStep = (W - PAD_X * 2) / 29;
+    const coords = pts.map((p, i) => ({
+        x: PAD_X + i * xStep,
+        y: PAD_Y + (1 - p) * (H - PAD_Y * 2)
+    }));
+
+    // Smooth cubic bezier path
+    function curveD(pts) {
+        if (pts.length < 2) return '';
+        let d = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 0; i < pts.length - 1; i++) {
+            const cp1x = pts[i].x + (pts[i + 1].x - pts[i].x) / 3;
+            const cp1y = pts[i].y;
+            const cp2x = pts[i + 1].x - (pts[i + 1].x - pts[i].x) / 3;
+            const cp2y = pts[i + 1].y;
+            d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${pts[i + 1].x} ${pts[i + 1].y}`;
+        }
+        return d;
+    }
+
+    const linePath = curveD(coords);
+    // Close the area down to the baseline
+    const areaPath = linePath
+        + ` L ${coords[coords.length - 1].x} ${H - PAD_Y}`
+        + ` L ${coords[0].x} ${H - PAD_Y} Z`;
+
+    // X-axis labels: show every ~5 days
+    const labelEls = coords.map((c, i) => {
+        if (i % 6 !== 0 && i !== 29) return '';
+        const d = new Date(today); d.setDate(today.getDate() - (29 - i));
+        const lbl = `${d.getDate()}/${d.getMonth() + 1}`;
+        const anchor = i === 29 ? 'end' : (i === 0 ? 'start' : 'middle');
+        return `<text x="${c.x}" y="${H + 8}" text-anchor="${anchor}" class="curve-label">${lbl}</text>`;
+    }).join('');
+
+    // Dots only on non-zero days
+    const dotEls = coords.map((c, p, arr) => {
+        const pct = pts[coords.indexOf(c)] ?? pts[arr.indexOf(c)];
+        if (!pct) return '';
+        return `<circle cx="${c.x}" cy="${c.y}" r="3" class="curve-dot">
+            <title>${Math.round(pct * 100)}% Completed</title>
+        </circle>`;
+    }).join('');
+
+    chart.innerHTML = `
+        <svg viewBox="0 0 ${W} ${H + 10}" preserveAspectRatio="xMidYMid meet" class="month-curve-svg" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.30"/>
+                    <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.0"/>
+                </linearGradient>
+            </defs>
+            <!-- Grid lines -->
+            ${[0, 0.5, 1].map(v => {
+        const gy = PAD_Y + (1 - v) * (H - PAD_Y * 2);
+        return `<line x1="${PAD_X}" y1="${gy}" x2="${W - PAD_X}" y2="${gy}" class="curve-grid"/>
+                        <text x="${PAD_X - 4}" y="${gy + 3}" text-anchor="end" class="curve-pct-label">${Math.round(v * 100)}%</text>`;
+    }).join('')}
+            <!-- Area fill -->
+            <path d="${areaPath}" fill="url(#curveGrad)" />
+            <!-- Line -->
+            <path d="${linePath}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="drop-shadow(0 4px 6px rgba(0,0,0,0.3))" />
+            <!-- Dots -->
+            ${dotEls}
+            <!-- X labels -->
+            ${labelEls}
+        </svg>`;
+}
+
 
 // ─── DONUT (habit-based) ──────────────────────────────
 function renderDonut() {
